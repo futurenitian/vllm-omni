@@ -6,11 +6,11 @@ E2E Online tests for Qwen3-Omni model with video input and audio output.
 
 import concurrent.futures
 import os
+import time
 from pathlib import Path
 
 import openai
 import pytest
-import time
 
 from tests.conftest import (
     OmniServer,

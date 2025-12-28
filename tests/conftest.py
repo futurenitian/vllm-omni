@@ -3,7 +3,9 @@ import io
 import os
 import socket
 import subprocess
+import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +14,6 @@ import numpy as np
 import psutil
 import pytest
 import soundfile as sf
-import sys
-import time
 import torch
 import yaml
 from vllm.logger import init_logger
@@ -52,7 +52,7 @@ def clean_gpu_memory_between_tests():
 
 
 def dummy_messages_from_mix_data(
-        system_prompt: dict[str, Any],
+    system_prompt: dict[str, Any],
     video_data_url: str = None,
     audio_data_url: str = None,
     image_data_url: str = None,
@@ -78,7 +78,7 @@ def dummy_messages_from_mix_data(
 
 def generate_synthetic_audio(
     duration: int,  # seconds
-        num_channels: int,  # 1：Mono，2：Stereo 5：5.1 surround sound
+    num_channels: int,  # 1：Mono，2：Stereo 5：5.1 surround sound
 ) -> dict[str, Any]:
     """Generate synthetic audio with random values.
     Default use 48000Hz.
@@ -145,7 +145,7 @@ def generate_synthetic_image(width: int, height: int) -> Any:
 
 def modify_stage_config(
     yaml_path: str,
-        stage_updates: dict[int, dict[str, Any]],
+    stage_updates: dict[int, dict[str, Any]],
 ) -> str:
     """
     Batch modify configurations for multiple stages in a YAML file.
