@@ -1,27 +1,23 @@
+import base64
+import io
 import os
-
-import pytest
-import torch
 import socket
 import subprocess
+import tempfile
+from pathlib import Path
+from typing import Any
+
+import cv2
+import numpy as np
+import psutil
+import pytest
+import soundfile as sf
 import sys
 import time
+import torch
 import yaml
-import base64
-import psutil
-import tempfile
-import cv2
-import io
-import numpy as np
-import soundfile as sf
-from typing import Dict, Any
-from pathlib import Path
 from vllm.logger import init_logger
 from vllm.utils import get_open_port
-
-from vllm.assets.audio import AudioAsset
-from vllm.assets.video import VideoAsset
-from vllm.assets.image import ImageAsset
 
 logger = init_logger(__name__)
 
@@ -56,12 +52,11 @@ def clean_gpu_memory_between_tests():
 
 
 def dummy_messages_from_mix_data(
-    system_prompt: Dict[str, Any],
+        system_prompt: dict[str, Any],
     video_data_url: str = None,
     audio_data_url: str = None,
     image_data_url: str = None,
-    content_text:
-    str = "What is recited in the audio? What is in this image? Describe the video briefly.",
+        content_text: str = "What is recited in the audio? What is in this image? Describe the video briefly.",
 ):
     """Create messages with video、image、audio data URL for OpenAI API."""
     content = [{"type": "text", "text": content_text}]
@@ -70,27 +65,23 @@ def dummy_messages_from_mix_data(
         (image_data_url, "image"),
         (audio_data_url, "audio"),
     ]
-    content.extend({
-        "type": f"{media_type}_url",
-        f"{media_type}_url": {
-            "url": url
-        }
-    } for url, media_type in media_items if url is not None)
+    content.extend(
+        {"type": f"{media_type}_url", f"{media_type}_url": {"url": url}}
+        for url, media_type in media_items
+        if url is not None
+    )
     return [
         system_prompt,
-        {
-            "role": "user",
-            "content": content
-        },
+        {"role": "user", "content": content},
     ]
 
 
 def generate_synthetic_audio(
     duration: int,  # seconds
-    num_channels: int  # 1：Mono，2：Stereo 5：5.1 surround sound
-) -> Dict[str, Any]:
+        num_channels: int,  # 1：Mono，2：Stereo 5：5.1 surround sound
+) -> dict[str, Any]:
     """Generate synthetic audio with random values.
-       Default use 48000Hz.
+    Default use 48000Hz.
     """
     sample_rate = 48000
     num_samples = int(sample_rate * duration)
@@ -110,8 +101,7 @@ def generate_synthetic_audio(
 
 
 def generate_synthetic_video(width: int, height: int, num_frames: int) -> Any:
-    """Generate synthetic video with random values.
-    """
+    """Generate synthetic video with random values."""
     video_data = np.random.randint(
         0,
         256,
@@ -119,10 +109,10 @@ def generate_synthetic_video(width: int, height: int, num_frames: int) -> Any:
         dtype=np.uint8,
     )
     video_tensor = torch.from_numpy(video_data)
-    with tempfile.NamedTemporaryFile(suffix=f".mp4", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
         temp_path = tmp.name
     frames, height, width, channels = video_tensor.shape
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(temp_path, fourcc, 30, (width, height))
 
     for i in range(frames):
@@ -139,23 +129,23 @@ def generate_synthetic_video(width: int, height: int, num_frames: int) -> Any:
 
 
 def generate_synthetic_image(width: int, height: int) -> Any:
-    """Generate synthetic image with random values.
-       """
+    """Generate synthetic image with random values."""
     from PIL import Image
+
     image = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
     pil_image = Image.fromarray(image)
-    pil_image = pil_image.convert('RGB')
+    pil_image = pil_image.convert("RGB")
     buffer = io.BytesIO()
-    pil_image.save(buffer, format='JPEG', quality=85, optimize=True)
+    pil_image.save(buffer, format="JPEG", quality=85, optimize=True)
     buffer.seek(0)
     image_bytes = buffer.read()
 
-    return base64.b64encode(image_bytes).decode('utf-8')
+    return base64.b64encode(image_bytes).decode("utf-8")
 
 
 def modify_stage_config(
     yaml_path: str,
-    stage_updates: Dict[int, Dict[str, Any]],
+        stage_updates: dict[int, dict[str, Any]],
 ) -> str:
     """
     Batch modify configurations for multiple stages in a YAML file.
@@ -188,29 +178,25 @@ def modify_stage_config(
     if not path.exists():
         raise FileNotFoundError(f"yaml does not exist: {path}")
     try:
-        with open(yaml_path, 'r', encoding='utf-8') as f:
+        with open(yaml_path, encoding="utf-8") as f:
             config = yaml.safe_load(f) or {}
     except Exception as e:
         raise ValueError(f"Cannot parse YAML file: {e}")
 
-    stage_args = config.get('stage_args', [])
+    stage_args = config.get("stage_args", [])
     if not stage_args:
         raise ValueError("the stage_args does not exist")
 
     for stage_id, config_dict in stage_updates.items():
         target_stage = None
         for stage in stage_args:
-            if stage.get('stage_id') == stage_id:
+            if stage.get("stage_id") == stage_id:
                 target_stage = stage
                 break
 
         if target_stage is None:
-            available_ids = [
-                s.get('stage_id') for s in stage_args if 'stage_id' in s
-            ]
-            raise KeyError(
-                f"Stage ID {stage_id} is not exist, available IDs: {available_ids}"
-            )
+            available_ids = [s.get("stage_id") for s in stage_args if "stage_id" in s]
+            raise KeyError(f"Stage ID {stage_id} is not exist, available IDs: {available_ids}")
 
         for key_path, value in config_dict.items():
             current = target_stage
@@ -218,24 +204,16 @@ def modify_stage_config(
             for i in range(len(keys) - 1):
                 key = keys[i]
                 if key not in current:
-                    raise KeyError(
-                        f"the {'.'.join(keys[:i+1])} does not exist")
+                    raise KeyError(f"the {'.'.join(keys[: i + 1])} does not exist")
 
                 elif not isinstance(current[key], dict) and i < len(keys) - 2:
-                    raise ValueError(
-                        f"{'.'.join(keys[:i+1])}' cannot continue deeper because it's not a dict"
-                    )
+                    raise ValueError(f"{'.'.join(keys[: i + 1])}' cannot continue deeper because it's not a dict")
                 current = current[key]
             current[keys[-1]] = value
 
     output_path = f"{yaml_path.split('.')[0]}_{int(time.time())}.yaml"
-    with open(output_path, 'w', encoding='utf-8') as f:
-        yaml.dump(config,
-                  f,
-                  default_flow_style=False,
-                  sort_keys=False,
-                  allow_unicode=True,
-                  indent=2)
+    with open(output_path, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True, indent=2)
 
     return output_path
 
@@ -281,8 +259,7 @@ class OmniServer:
         self.proc = subprocess.Popen(
             cmd,
             env=env,
-            cwd=os.path.dirname(os.path.dirname(os.path.abspath(
-                __file__))),  # Set working directory to vllm-omni root
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  # Set working directory to vllm-omni root
         )
 
         # Wait for server to be ready
