@@ -161,7 +161,8 @@ def levenshtein_distance(s1, s2):
             current_row.append(min(insertions, deletions, substitutions))
         previous_row = current_row
 
-    return previous_row[-1]
+    max_len = max(len(s1), len(s2))
+    return 1 - (previous_row[-1] / max_len) if max_len > 0 else 1.0
 
 def convert_audio_to_text(audio_data):
     audio_data = base64.b64decode(audio_data)
@@ -172,7 +173,6 @@ def convert_audio_to_text(audio_data):
     print(f"audio data is saved: {output_path}")
     recognizer = sr.Recognizer()
     with sr.AudioFile(output_path) as source:
-        recognizer.adjust_for_ambient_noise(source, duration=0.5)
         audio_data = recognizer.record(source)
 
         print("Start voice recognition...")

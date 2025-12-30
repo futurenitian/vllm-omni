@@ -31,6 +31,7 @@ stage_args:
       top_k: 1
       max_tokens: 100
       seed: 42
+      ignore_eos: False
       detokenize: True
       repetition_penalty: 1.05
 

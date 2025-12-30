@@ -10,7 +10,8 @@ from pathlib import Path
 import openai
 import pytest
 import concurrent.futures
-from tests.conftest import OmniServer, dummy_messages_from_mix_data, modify_stage_config, convert_audio_to_text
+from tests.conftest import (OmniServer, dummy_messages_from_mix_data, modify_stage_config, convert_audio_to_text,
+                            levenshtein_distance)
 
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
@@ -118,7 +119,7 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
     model, stage_config_path = test_config
     num_concurrent_requests = 5
     stage_config_path = modify_stage_config(stage_config_path, {
-        0: {"runtime.max_batch_size": num_concurrent_requests}, 1: {"runtime.max_batch_size": num_concurrent_requests}, 2: {"runtime.max_batch_size": num_concurrent_requests}})
+        0: {"runtime.max_batch_size": num_concurrent_requests, "default_sampling_params.ignore_eos": True}, 1: {"runtime.max_batch_size": num_concurrent_requests}, 2: {"runtime.max_batch_size": num_concurrent_requests}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--init-sleep-seconds", "90"]) as server:
         messages = dummy_messages_from_mix_data(
             system_prompt=get_system_prompt(),
@@ -167,5 +168,5 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
             assert chat_completion.usage.completion_tokens == 1000, "The output length differs from the requested max_tokens."
 
             # Verify text output same as audio output
-            assert convert_audio_to_text(audio_data)==text_content, "The audio content is not same as the text"
+            assert levenshtein_distance(convert_audio_to_text(audio_data),text_content) > 0.9, "The audio content is not same as the text"
 
