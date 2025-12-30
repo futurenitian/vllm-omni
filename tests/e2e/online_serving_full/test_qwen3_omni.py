@@ -10,7 +10,7 @@ from pathlib import Path
 import openai
 import pytest
 import concurrent.futures
-from tests.conftest import OmniServer, dummy_messages_from_mix_data, modify_stage_config
+from tests.conftest import OmniServer, dummy_messages_from_mix_data, modify_stage_config, convert_audio_to_text
 
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
@@ -126,6 +126,7 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
 
         # Test single completion
         api_client = client(server)
+        e2e_list = list()
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_concurrent_requests) as executor:
             # Submit multiple completion requests concurrently
             futures = [
@@ -138,25 +139,33 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
                 )
                 for _ in range(num_concurrent_requests)
             ]
-
+            start_time = time.perf_counter()
             # Wait for all requests to complete and collect results
-            chat_completions = [future.result() for future in concurrent.futures.as_completed(futures)]
+            chat_completions = list()
+            for future in concurrent.futures.as_completed(futures):
+                chat_completions.append(future.result())
+                # Verify E2E
+                current_e2e = time.perf_counter() - start_time
+                print(f"the request e2e is: {current_e2e}")
+                # TODO: Verify the E2E latency after confirmation baseline.
+                e2e_list.append(current_e2e)
 
+        print(f"the avg e2e is: {sum(e2e_list)/len(e2e_list)}")
         # Verify all completions succeeded
         assert len(chat_completions) == num_concurrent_requests, "Not all requests succeeded."
         for chat_completion in chat_completions:
             # Verify audio output success
             audio_message = chat_completion.choices[1].message
-            assert audio_message.audio.data is not None, "No audio output is generated"
+            audio_data = audio_message.audio.data
+            assert audio_data is not None, "No audio output is generated"
             assert audio_message.audio.expires_at > time.time(), "The generated audio has expired."
 
             # Verify text output success
             text_choice = chat_completion.choices[0]
+            text_content = text_choice.message.content
             assert text_choice.message.content is not None, "No text output is generated"
             assert chat_completion.usage.completion_tokens == 1000, "The output length differs from the requested max_tokens."
 
-            # Verify E2E
-            # TODO: Verify the E2E latency after confirmation baseline.
-
-
+            # Verify text output same as audio output
+            assert convert_audio_to_text(audio_data)==text_content, "The audio content is not same as the text"
 

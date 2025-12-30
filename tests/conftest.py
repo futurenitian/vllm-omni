@@ -10,12 +10,13 @@ from pathlib import Path
 from typing import Any
 
 import cv2
-import numpy as np
 import psutil
 import pytest
 import soundfile as sf
 import torch
 import yaml
+import whisper
+import numpy as np
 from vllm.logger import init_logger
 from vllm.utils import get_open_port
 
@@ -142,6 +143,17 @@ def generate_synthetic_image(width: int, height: int) -> Any:
 
     return base64.b64encode(image_bytes).decode("utf-8")
 
+
+def convert_audio_to_text(audio_data, model_size="base"):
+    audio_data = base64.b64decode(audio_data)
+    output_path = f"./test_{int(time.time())}"
+    with open(output_path, 'wb') as audio_file:
+        audio_file.write(audio_data)
+
+    print(f"audio data is saved: {output_path}")
+    model = whisper.load_model(model_size)
+    result = model.transcribe(output_path)
+    return result["text"].strip()
 
 def modify_stage_config(
     yaml_path: str,
