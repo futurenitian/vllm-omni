@@ -82,6 +82,8 @@ def test_text_to_text_001(test_config: tuple[str, str]) -> None:
         chat_completion = api_client.chat.completions.create(
             model=server.model, messages=messages, max_tokens=10, stop=None, modalities=["text"]
         )
+        # Verify only output text
+        assert len(chat_completion.choices) == 1, "The generated content includes more than just text."
 
         # Verify text output success
         text_choice = chat_completion.choices[0]
