@@ -4,41 +4,22 @@
 E2E Online tests for Qwen3-Omni model with video input and audio output.
 """
 
-import concurrent.futures
-import ctypes
 import os
-import signal
-import socket
-import subprocess
-import sys
 import time
 from pathlib import Path
-
 import openai
 import pytest
-from tests.conftest import OmniServer, dummy_messages_from_mix_data
+from tests.conftest import OmniServer, dummy_messages_from_mix_data, modify_stage_config
 
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
 models = ["Qwen/Qwen3-Omni-30B-A3B-Instruct"]
 
 # CI stage config for 2*H100-80G GPUs
-stage_configs = [str(Path(__file__).parent / "stage_configs" / "qwen3_omni_ci.yaml")]
+stage_configs = [str(Path(__file__).parent.parent / "stage_configs" / "qwen3_omni_ci.yaml")]
 
 # Create parameter combinations for model and stage config
 test_params = [(model, stage_config) for model in models for stage_config in stage_configs]
-
-
-@pytest.fixture
-def omni_server(request):
-    """Start vLLM-Omni server as a subprocess with actual model weights.
-    Uses module scope so the server starts only once for all tests.
-    Multi-stage initialization can take 10-20+ minutes.
-    """
-    model, stage_config_path = request.param
-    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--init-sleep-seconds", "90"]) as server:
-        yield server
-
 
 def client(omni_server):
     """OpenAI client for the running vLLM-Omni server."""
@@ -102,6 +83,8 @@ def test_text_to_auio_001(test_config: tuple[str, str]) -> None:
     """Test processing text, generating text output via OpenAI API."""
 
     model, stage_config_path = test_config
+    stage_config_path = modify_stage_config(stage_config_path, {
+        0: {"engine_args.gpu_memory_utilization": 0.95, "engine_args.tensor_parallel_size": 1, "runtime.devices": "2"}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--init-sleep-seconds", "90"]) as server:
         messages = dummy_messages_from_mix_data(
             system_prompt=get_system_prompt(),
@@ -111,13 +94,16 @@ def test_text_to_auio_001(test_config: tuple[str, str]) -> None:
         api_client = client(server)
         start_time = time.perf_counter()
         chat_completion = api_client.chat.completions.create(
-            model=server.model, messages=messages, max_tokens=10, stop=None
+            model=server.model, messages=messages, max_tokens=10, stop=None, modalities=["audio"]
         )
 
-        # Verify text output success
-        text_choice = chat_completion.choices[0]
-        assert text_choice.message.content is not None, "No text output is generated"
-        assert chat_completion.usage.completion_tokens == 10, "The output length differs from the requested max_tokens."
+        # Verify only output audio
+        assert len(chat_completion.choices) == 1, "The generated content includes more than just text."
+
+        # Verify audio output success
+        audio_message = chat_completion.choices[1].message
+        assert audio_message.audio.data is not None, "No audio output is generated"
+        assert audio_message.audio.expires_at > time.time(), "The generated audio has expired."
 
         # Verify E2E
         print(f"the request e2e is: {time.perf_counter() - start_time}")
