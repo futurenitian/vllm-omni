@@ -144,7 +144,26 @@ def generate_synthetic_image(width: int, height: int) -> Any:
     return base64.b64encode(image_bytes).decode("utf-8")
 
 
-def convert_audio_to_text(audio_data, model_size="base"):
+def levenshtein_distance(s1, s2):
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+
+    if len(s2) == 0:
+        return len(s1)
+
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+
+    return previous_row[-1]
+
+def convert_audio_to_text(audio_data):
     audio_data = base64.b64decode(audio_data)
     output_path = f"./test_{int(time.time())}"
     with open(output_path, 'wb') as audio_file:
@@ -154,7 +173,7 @@ def convert_audio_to_text(audio_data, model_size="base"):
     recognizer = sr.Recognizer()
     with sr.AudioFile(output_path) as source:
         recognizer.adjust_for_ambient_noise(source, duration=0.5)
-        audio_data = recognizer.recognizer.record(source)
+        audio_data = recognizer.record(source)
 
         print("Start voice recognition...")
 
