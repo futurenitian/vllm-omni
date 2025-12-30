@@ -28,7 +28,6 @@ def client(omni_server):
         api_key="EMPTY",
     )
 
-
 def get_system_prompt():
     return {
         "role": "system",
@@ -50,7 +49,6 @@ def get_system_prompt():
 @pytest.mark.parametrize("test_config", test_params)
 def test_text_to_text_001(test_config: tuple[str, str]) -> None:
     """Test processing text, generating text output via OpenAI API."""
-
     model, stage_config_path = test_config
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--init-sleep-seconds", "90"]) as server:
         messages = dummy_messages_from_mix_data(
@@ -80,7 +78,7 @@ def test_text_to_text_001(test_config: tuple[str, str]) -> None:
 @pytest.mark.H100_2
 @pytest.mark.parametrize("test_config", test_params)
 def test_text_to_auio_001(test_config: tuple[str, str]) -> None:
-    """Test processing text, generating text output via OpenAI API."""
+    """Test processing text, generating audio output via OpenAI API."""
 
     model, stage_config_path = test_config
     stage_config_path = modify_stage_config(stage_config_path, {
