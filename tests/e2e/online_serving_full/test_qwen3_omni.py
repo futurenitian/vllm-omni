@@ -17,8 +17,6 @@ from pathlib import Path
 import openai
 import pytest
 from tests.conftest import OmniServer, dummy_messages_from_mix_data
-from vllm.assets.video import VideoAsset
-from vllm.utils import get_open_port
 
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
@@ -69,7 +67,36 @@ def get_system_prompt():
 @pytest.mark.full
 @pytest.mark.H100_2
 @pytest.mark.parametrize("test_config", test_params)
-def test_mixed_modalities_to_text_audio(test_config: tuple[str, str]) -> None:
+def test_text_to_text_001(test_config: tuple[str, str]) -> None:
+    """Test processing text, generating text output via OpenAI API."""
+
+    model, stage_config_path = test_config
+    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--init-sleep-seconds", "90"]) as server:
+        messages = dummy_messages_from_mix_data(
+            system_prompt=get_system_prompt(),
+        )
+
+        # Test single completion
+        api_client = client(server)
+        start_time = time.perf_counter()
+        chat_completion = api_client.chat.completions.create(
+            model=server.model, messages=messages, max_tokens=10, stop=None, modalities=["text"]
+        )
+
+        # Verify text output success
+        text_choice = chat_completion.choices[0]
+        assert text_choice.message.content is not None, "No text output is generated"
+        assert chat_completion.usage.completion_tokens == 10, "The output length differs from the requested max_tokens."
+
+        # Verify E2E
+        print(f"the request e2e is: {time.perf_counter() - start_time}")
+        # TODO: Verify the E2E latency after confirmation baseline.
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_text_to_auio_001(test_config: tuple[str, str]) -> None:
     """Test processing text, generating text output via OpenAI API."""
 
     model, stage_config_path = test_config
