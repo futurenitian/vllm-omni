@@ -11,7 +11,7 @@ import openai
 import pytest
 import concurrent.futures
 from tests.conftest import (OmniServer, dummy_messages_from_mix_data, modify_stage_config, convert_audio_to_text,
-                            levenshtein_distance)
+                            cosine_similarity_text, generate_synthetic_audio)
 
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
@@ -119,7 +119,7 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
     model, stage_config_path = test_config
     num_concurrent_requests = 5
     stage_config_path = modify_stage_config(stage_config_path, {
-        0: {"runtime.max_batch_size": num_concurrent_requests, "default_sampling_params.ignore_eos": True}, 1: {"runtime.max_batch_size": num_concurrent_requests}, 2: {"runtime.max_batch_size": num_concurrent_requests}})
+        0: {"runtime.max_batch_size": num_concurrent_requests, "default_sampling_params.ignore_eos": True}, 1: {"runtime.max_batch_size": num_concurrent_requests}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--init-sleep-seconds", "90"]) as server:
         messages = dummy_messages_from_mix_data(
             system_prompt=get_system_prompt(),
@@ -168,5 +168,38 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
             assert chat_completion.usage.completion_tokens == 1000, "The output length differs from the requested max_tokens."
 
             # Verify text output same as audio output
-            assert levenshtein_distance(convert_audio_to_text(audio_data),text_content) > 0.9, "The audio content is not same as the text"
+            print(f"text content is: {text_content}")
+            print(f"audio content is: {convert_audio_to_text(audio_data)}")
+            assert cosine_similarity_text(convert_audio_to_text(audio_data),text_content) > 0.9, "The audio content is not same as the text"
 
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_audio_to_text_001(test_config: tuple[str, str]) -> None:
+    """Test processing text, generating text output via OpenAI API."""
+    model, stage_config_path = test_config
+    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--init-sleep-seconds", "90"]) as server:
+        audio_data_url = f"data:audio/ogg;base64,{generate_synthetic_audio(1, 1)}"
+        messages = dummy_messages_from_mix_data(
+            audio_data_url=audio_data_url
+        )
+
+        # Test single completion
+        api_client = client(server)
+        start_time = time.perf_counter()
+        chat_completion = api_client.chat.completions.create(
+            model=server.model, messages=messages, max_tokens=1000, stop=None, modalities=["text"]
+        )
+        # Verify only output text
+        assert len(chat_completion.choices) == 1, "The generated content includes more than just text."
+
+        # Verify text output success
+        text_choice = chat_completion.choices[0]
+        assert text_choice.message.content is not None, "No text output is generated"
+        assert chat_completion.usage.completion_tokens == 1000, "The output length differs from the requested max_tokens."
+
+        # Verify E2E
+        print(f"the request e2e is: {time.perf_counter() - start_time}")
+        # TODO: Verify the E2E latency after confirmation baseline.

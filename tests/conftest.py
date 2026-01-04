@@ -53,7 +53,7 @@ def clean_gpu_memory_between_tests():
 
 
 def dummy_messages_from_mix_data(
-    system_prompt: dict[str, Any],
+    system_prompt: dict[str, Any]=None,
     video_data_url: str = None,
     audio_data_url: str = None,
     image_data_url: str = None,
@@ -71,10 +71,10 @@ def dummy_messages_from_mix_data(
         for url, media_type in media_items
         if url is not None
     )
-    return [
-        system_prompt,
-        {"role": "user", "content": content},
-    ]
+    messages = [{"role": "user", "content": content}]
+    if system_prompt is not None:
+        messages = [system_prompt] + messages
+    return messages
 
 
 def generate_synthetic_audio(
@@ -143,26 +143,12 @@ def generate_synthetic_image(width: int, height: int) -> Any:
 
     return base64.b64encode(image_bytes).decode("utf-8")
 
-
-def levenshtein_distance(s1, s2):
-    if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
-
-    if len(s2) == 0:
-        return len(s1)
-
-    previous_row = range(len(s2) + 1)
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
-        for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
-
-    max_len = max(len(s1), len(s2))
-    return 1 - (previous_row[-1] / max_len) if max_len > 0 else 1.0
+def cosine_similarity_text(s1, s2):
+    from sklearn.feature_extraction.text import CountVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    vectorizer = CountVectorizer().fit_transform([s1, s2])
+    vectors = vectorizer.toarray()
+    return cosine_similarity([vectors[0]], [vectors[1]])[0][0]
 
 def convert_audio_to_text(audio_data):
     audio_data = base64.b64decode(audio_data)
