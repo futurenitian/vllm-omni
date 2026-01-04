@@ -432,6 +432,7 @@ def test_text_audio_to_text_audio_001(test_config: tuple[str, str]) -> None:
             audio_data_url.append(f"data:audio/ogg;base64,{generate_synthetic_audio(10, 5)}")
 
         messages = dummy_messages_from_mix_data(
+            system_prompt=get_system_prompt(),
             audio_data_url=audio_data_url,
             content_text="What is recited in the audio? What is in this image? Describe the video briefly."
         )
