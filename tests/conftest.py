@@ -54,18 +54,33 @@ def clean_gpu_memory_between_tests():
 
 def dummy_messages_from_mix_data(
     system_prompt: dict[str, Any]=None,
-    video_data_url: str = None,
-    audio_data_url: str = None,
-    image_data_url: str = None,
+    video_data_url: Any = None,
+    audio_data_url: Any = None,
+    image_data_url: Any = None,
     content_text: str = "What is recited in the audio? What is in this image? Describe the video briefly.",
 ):
     """Create messages with video、image、audio data URL for OpenAI API."""
     content = [{"type": "text", "text": content_text}]
-    media_items = [
-        (video_data_url, "video"),
-        (image_data_url, "image"),
-        (audio_data_url, "audio"),
-    ]
+
+    media_items = []
+    if isinstance(video_data_url, list):
+        for video_url in video_data_url:
+            media_items.append((video_url, "video"))
+    else:
+        media_items.append((video_data_url, "video"))
+
+    if isinstance(image_data_url, list):
+        for url in image_data_url:
+            media_items.append((url, "image"))
+    else:
+        media_items.append((image_data_url, "image"))
+
+    if isinstance(audio_data_url, list):
+        for url in audio_data_url:
+            media_items.append((url, "audio"))
+    else:
+        media_items.append((audio_data_url, "audio"))
+
     content.extend(
         {"type": f"{media_type}_url", f"{media_type}_url": {"url": url}}
         for url, media_type in media_items
@@ -93,7 +108,7 @@ def generate_synthetic_audio(
 
     buffer = io.BytesIO()
 
-    sf.write(buffer, audio_np.T, sample_rate, format="mp3")
+    sf.write(buffer, audio_np.T, sample_rate, format="wav")
 
     buffer.seek(0)
     audio_bytes = buffer.read()
