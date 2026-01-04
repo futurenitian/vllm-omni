@@ -55,6 +55,7 @@ def test_text_to_text_001(test_config: tuple[str, str]) -> None:
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         messages = dummy_messages_from_mix_data(
             system_prompt=get_system_prompt(),
+            content_text="What is recited in the audio? What is in this image? Describe the video briefly."
         )
 
         # Test single completion
@@ -88,6 +89,7 @@ def test_text_to_audio_001(test_config: tuple[str, str]) -> None:
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         messages = dummy_messages_from_mix_data(
             system_prompt=get_system_prompt(),
+            content_text="What is recited in the audio? What is in this image? Describe the video briefly."
         )
 
         # Test single completion
@@ -123,6 +125,7 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         messages = dummy_messages_from_mix_data(
             system_prompt=get_system_prompt(),
+            content_text="What is recited in the audio? What is in this image? Describe the video briefly."
         )
 
         # Test single completion

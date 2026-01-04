@@ -57,10 +57,14 @@ def dummy_messages_from_mix_data(
     video_data_url: Any = None,
     audio_data_url: Any = None,
     image_data_url: Any = None,
-    content_text: str = "What is recited in the audio? What is in this image? Describe the video briefly.",
+    content_text: str = None,
 ):
     """Create messages with video、image、audio data URL for OpenAI API."""
-    content = [{"type": "text", "text": content_text}]
+
+    if content_text is not None:
+        content = [{"type": "text", "text": content_text}]
+    else:
+        content = []
 
     media_items = []
     if isinstance(video_data_url, list):
