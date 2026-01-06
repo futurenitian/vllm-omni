@@ -31,7 +31,6 @@ def test_text_to_text_001(test_config) -> None:
     with OmniRunner(model, seed=42, stage_configs_path=stage_config_path, stage_init_timeout=300) as runner:
         # Prepare inputs
         question = "What is the capital of China?"
-
         start_time = time.perf_counter()
         outputs = runner.outputs = runner.generate_multimodal(
             prompts=question,
