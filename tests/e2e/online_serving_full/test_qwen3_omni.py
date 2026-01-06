@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 import openai
 import pytest
+import subprocess
 import concurrent.futures
 from tests.conftest import (OmniServer, dummy_messages_from_mix_data, modify_stage_config, convert_audio_to_text,
                             cosine_similarity_text, generate_synthetic_audio, generate_synthetic_image, generate_synthetic_video)
@@ -865,3 +866,48 @@ def test_mix_to_text_audio_002(test_config: tuple[str, str]) -> None:
         0: {"runtime.max_batch_size": num_concurrent_requests},
         1: {"runtime.max_batch_size": num_concurrent_requests}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
+        command = [
+            "vllm-omni",
+            "bench",
+            "serve",
+            "--omni",
+            "--model",
+            server.model,
+            "--host",
+            server.host,
+            "--port",
+            str(server.port),
+            "--dataset-name",
+            "random-mm",
+            "--request_rate",
+            "0.5",
+            "--random-input-len",
+            "100",
+            "--random-range-ratio",
+            "0.0",
+            "--random-mm-base-items-per-request",
+            "3",
+            "--random-mm-num-mm-items-range-ratio",
+            "0",
+            "--random-mm-limit-mm-per-prompt",
+            '{"image":1, "video": 1, "audio": 1}',
+            "--random-mm-bucket-config",
+            '{"(16,16,1)":0.33, "(0,1,1)": 0.33, "(16, 16, 24)": 0.33}',
+            "--ignore-eos",
+            "--random-output-len",
+            "10",
+            "--num-prompts",
+            "100",
+            "--percentile-metrics",
+            "ttft,tpot,itl,e2el",
+            "--endpoint",
+            "/v1/chat/completions",
+            "--backend",
+            "openai-chat",
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        print(result.stdout)
+        print(result.stderr)
+
+        assert result.returncode == 0, f"Benchmark failed: {result.stderr}"
+
