@@ -865,4 +865,3 @@ def test_mix_to_text_audio_002(test_config: tuple[str, str]) -> None:
         0: {"runtime.max_batch_size": num_concurrent_requests},
         1: {"runtime.max_batch_size": num_concurrent_requests}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
-        
