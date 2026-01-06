@@ -724,8 +724,3 @@ class OmniRunner:
         """Close and cleanup the Omni instance."""
         if hasattr(self.omni, "close"):
             self.omni.close()
-
-
-@pytest.fixture(scope="session")
-def omni_runner():
-    return OmniRunner
