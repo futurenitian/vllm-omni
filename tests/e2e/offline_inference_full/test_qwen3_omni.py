@@ -32,7 +32,7 @@ def test_text_to_text_001(test_config) -> None:
         # Prepare inputs
         question = "What is the capital of China?"
         start_time = time.perf_counter()
-        outputs = runner.outputs = runner.generate_multimodal(
+        outputs = runner.generate_multimodal(
             prompts=question,
             modalities=["text"]
         )
