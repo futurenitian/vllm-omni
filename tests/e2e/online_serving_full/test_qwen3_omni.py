@@ -849,3 +849,20 @@ def test_mix_to_text_audio_001(test_config: tuple[str, str]) -> None:
             print(f"text content is: {text_content}")
             print(f"audio content is: {audio_content}")
             assert cosine_similarity_text(audio_content,text_content) > 0.9, "The audio content is not same as the text"
+
+
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_mix_to_text_audio_002(test_config: tuple[str, str]) -> None:
+    """Test processing text, generating audio output via OpenAI API."""
+
+    model, stage_config_path = test_config
+    num_concurrent_requests = 256
+    stage_config_path = modify_stage_config(stage_config_path, {
+        0: {"runtime.max_batch_size": num_concurrent_requests},
+        1: {"runtime.max_batch_size": num_concurrent_requests}})
+    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
+        
