@@ -866,48 +866,176 @@ def test_mix_to_text_audio_002(test_config: tuple[str, str]) -> None:
         0: {"runtime.max_batch_size": num_concurrent_requests},
         1: {"runtime.max_batch_size": num_concurrent_requests}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
-        command = [
-            "vllm-omni",
-            "bench",
-            "serve",
-            "--omni",
-            "--model",
-            server.model,
-            "--host",
-            server.host,
-            "--port",
-            str(server.port),
-            "--dataset-name",
-            "random-mm",
-            "--request_rate",
-            "0.5",
-            "--random-input-len",
-            "100",
-            "--random-range-ratio",
-            "0.0",
-            "--random-mm-base-items-per-request",
-            "3",
-            "--random-mm-num-mm-items-range-ratio",
-            "0",
-            "--random-mm-limit-mm-per-prompt",
-            '{"image":1, "video": 1, "audio": 1}',
-            "--random-mm-bucket-config",
-            '{"(16,16,1)":0.33, "(0,1,1)": 0.33, "(16, 16, 24)": 0.33}',
-            "--ignore-eos",
-            "--random-output-len",
-            "10",
-            "--num-prompts",
-            "100",
-            "--percentile-metrics",
-            "ttft,tpot,itl,e2el",
-            "--endpoint",
-            "/v1/chat/completions",
-            "--backend",
-            "openai-chat",
-        ]
-        result = subprocess.run(command, capture_output=True, text=True)
-        print(result.stdout)
-        print(result.stderr)
+        request_rates = [0.5, 0.8, 1]
 
-        assert result.returncode == 0, f"Benchmark failed: {result.stderr}"
+        for request_rate in request_rates:
+            command = [
+                "vllm-omni",
+                "bench",
+                "serve",
+                "--omni",
+                "--model",
+                server.model,
+                "--host",
+                server.host,
+                "--port",
+                str(server.port),
+                "--dataset-name",
+                "random-mm",
+                "--request_rate",
+                str(request_rate),
+                "--random-input-len",
+                "100",
+                "--random-range-ratio",
+                "0.0",
+                "--random-mm-base-items-per-request",
+                "3",
+                "--random-mm-num-mm-items-range-ratio",
+                "0",
+                "--random-mm-limit-mm-per-prompt",
+                '{"image":1, "video": 1, "audio": 1}',
+                "--random-mm-bucket-config",
+                '{"(16,16,1)":0.33, "(0,1,1)": 0.33, "(16, 16, 24)": 0.33}',
+                "--ignore-eos",
+                "--random-output-len",
+                "10",
+                "--num-prompts",
+                "100",
+                "--percentile-metrics",
+                "ttft,tpot,itl,e2el",
+                "--endpoint",
+                "/v1/chat/completions",
+                "--backend",
+                "openai-chat",
+            ]
+            result = subprocess.run(command, capture_output=True, text=True)
+            print(result.stdout)
+            print(result.stderr)
 
+            assert result.returncode == 0, f"Benchmark failed: {result.stderr}"
+
+
+
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_mix_to_text_audio_003(test_config: tuple[str, str]) -> None:
+    """Test processing text, generating audio output via OpenAI API."""
+
+    model, stage_config_path = test_config
+    num_concurrent_requests = 256
+    stage_config_path = modify_stage_config(stage_config_path, {
+        0: {"runtime.max_batch_size": num_concurrent_requests},
+        1: {"runtime.max_batch_size": num_concurrent_requests}})
+    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
+        request_rates = [0.5, 0.8, 1]
+
+        for request_rate in request_rates:
+            command = [
+                "vllm-omni",
+                "bench",
+                "serve",
+                "--omni",
+                "--model",
+                server.model,
+                "--host",
+                server.host,
+                "--port",
+                str(server.port),
+                "--dataset-name",
+                "random-mm",
+                "--request_rate",
+                str(request_rate),
+                "--random-input-len",
+                "1000",
+                "--random-range-ratio",
+                "0.0",
+                "--random-mm-base-items-per-request",
+                "6",
+                "--random-mm-num-mm-items-range-ratio",
+                "0",
+                "--random-mm-limit-mm-per-prompt",
+                '{"image":2, "video": 2, "audio": 2}',
+                "--random-mm-bucket-config",
+                '{"(1280,720,1)":0.33, "(0,10,2)": 0.33, "(1280, 720, 300)": 0.33}',
+                "--ignore-eos",
+                "--random-output-len",
+                "1000",
+                "--num-prompts",
+                "100",
+                "--percentile-metrics",
+                "ttft,tpot,itl,e2el",
+                "--endpoint",
+                "/v1/chat/completions",
+                "--backend",
+                "openai-chat",
+            ]
+            result = subprocess.run(command, capture_output=True, text=True)
+            print(result.stdout)
+            print(result.stderr)
+
+            assert result.returncode == 0, f"Benchmark failed: {result.stderr}"
+
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_mix_to_text_audio_004(test_config: tuple[str, str]) -> None:
+    """Test processing text, generating audio output via OpenAI API."""
+
+    model, stage_config_path = test_config
+    num_concurrent_requests = 256
+    stage_config_path = modify_stage_config(stage_config_path, {
+        0: {"runtime.max_batch_size": num_concurrent_requests},
+        1: {"runtime.max_batch_size": num_concurrent_requests}})
+    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
+        request_rates = [0.5, 0.8, 1]
+
+        for request_rate in request_rates:
+            command = [
+                "vllm-omni",
+                "bench",
+                "serve",
+                "--omni",
+                "--model",
+                server.model,
+                "--host",
+                server.host,
+                "--port",
+                str(server.port),
+                "--dataset-name",
+                "random-mm",
+                "--request_rate",
+                str(request_rate),
+                "--random-input-len",
+                "1000",
+                "--random-range-ratio",
+                "0.0",
+                "--random-mm-base-items-per-request",
+                "10",
+                "--random-mm-num-mm-items-range-ratio",
+                "0",
+                "--random-mm-limit-mm-per-prompt",
+                '{"image":4, "video": 4, "audio": 2}',
+                "--random-mm-bucket-config",
+                '{"(1280,720,1)":0.33, "(0,10,5)": 0.33, "(1280, 720, 300)": 0.33}',
+                "--ignore-eos",
+                "--random-output-len",
+                "1000",
+                "--num-prompts",
+                "1000",
+                "--percentile-metrics",
+                "ttft,tpot,itl,e2el",
+                "--endpoint",
+                "/v1/chat/completions",
+                "--backend",
+                "openai-chat",
+            ]
+            result = subprocess.run(command, capture_output=True, text=True)
+            print(result.stdout)
+            print(result.stderr)
+
+            assert result.returncode == 0, f"Benchmark failed: {result.stderr}"
