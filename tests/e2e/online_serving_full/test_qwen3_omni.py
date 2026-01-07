@@ -868,7 +868,6 @@ def test_mix_to_text_audio_002(test_config: tuple[str, str]) -> None:
         1: {"runtime.max_batch_size": num_concurrent_requests}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         request_rates = [0.5, 0.8, 1]
-
         for request_rate in request_rates:
             args = [
                 "--model",
@@ -903,11 +902,10 @@ def test_mix_to_text_audio_002(test_config: tuple[str, str]) -> None:
                 "--endpoint",
                 "/v1/chat/completions",
                 "--backend",
-                "openai-chat",
-                "--save-result"
+                "openai-chat"
             ]
             result = run_benchmark(args)
-            assert result.get("successful requests") == 100, "The request success rate did not reach 100%."
+            assert result.get("completed") == 100, "The request success rate did not reach 100%."
 
 @pytest.mark.full
 @pytest.mark.H100_2
@@ -923,11 +921,7 @@ def test_mix_to_text_audio_003(test_config: tuple[str, str]) -> None:
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         request_rates = [0.5, 0.8, 1]
         for request_rate in request_rates:
-            command = [
-                "vllm-omni",
-                "bench",
-                "serve",
-                "--omni",
+            args = [
                 "--model",
                 server.model,
                 "--host",
@@ -960,14 +954,10 @@ def test_mix_to_text_audio_003(test_config: tuple[str, str]) -> None:
                 "--endpoint",
                 "/v1/chat/completions",
                 "--backend",
-                "openai-chat",
-                "--save-result"
+                "openai-chat"
             ]
-            result = subprocess.run(command, capture_output=True, text=True)
-            print(result.stdout)
-            print(result.stderr)
-
-            assert result.returncode == 0, f"Benchmark failed: {result.stderr}"
+            result = run_benchmark(args)
+            assert result.get("completed") == 100, "The request success rate did not reach 100%."
 
 
 
@@ -986,11 +976,7 @@ def test_mix_to_text_audio_004(test_config: tuple[str, str]) -> None:
         request_rates = [0.5, 0.8, 1]
 
         for request_rate in request_rates:
-            command = [
-                "vllm-omni",
-                "bench",
-                "serve",
-                "--omni",
+            args = [
                 "--model",
                 server.model,
                 "--host",
@@ -1026,8 +1012,5 @@ def test_mix_to_text_audio_004(test_config: tuple[str, str]) -> None:
                 "openai-chat",
                 "--save-result"
             ]
-            result = subprocess.run(command, capture_output=True, text=True)
-            print(result.stdout)
-            print(result.stderr)
-
-            assert result.returncode == 0, f"Benchmark failed: {result.stderr}"
+            result = run_benchmark(args)
+            assert result.get("completed") == 1000, "The request success rate did not reach 100%."

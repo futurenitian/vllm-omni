@@ -279,7 +279,7 @@ def run_benchmark(args: list) -> Any:
     command = ["vllm-omni",
                 "bench",
                 "serve",
-                "--omni"] + args + ["--result-filename", result_filename]
+                "--omni"] + args + ["--save-result","--result-filename", result_filename]
     process = subprocess.Popen(command,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE,
