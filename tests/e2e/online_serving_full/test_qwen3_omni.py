@@ -974,7 +974,6 @@ def test_mix_to_text_audio_004(test_config: tuple[str, str]) -> None:
         1: {"runtime.max_batch_size": num_concurrent_requests}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         request_rates = [0.5, 0.8, 1]
-
         for request_rate in request_rates:
             args = [
                 "--model",
@@ -1009,8 +1008,7 @@ def test_mix_to_text_audio_004(test_config: tuple[str, str]) -> None:
                 "--endpoint",
                 "/v1/chat/completions",
                 "--backend",
-                "openai-chat",
-                "--save-result"
+                "openai-chat"
             ]
             result = run_benchmark(args)
             assert result.get("completed") == 1000, "The request success rate did not reach 100%."

@@ -43,8 +43,10 @@ from vllm_omni.benchmarks.lib.endpoint_request_func import (
 from vllm_omni.benchmarks.lib.endpoint_request_func import MixRequestFuncOutput
 
 from vllm.benchmarks.datasets import SampleRequest,add_dataset_parser
-from vllm.benchmarks.serve import (BenchmarkMetrics,EmbedBenchmarkMetrics,
-                                   TaskType,get_request,check_goodput_args,save_to_pytorch_benchmark_format,add_cli_args)
+from vllm.benchmarks.serve import (BenchmarkMetrics,EmbedBenchmarkMetrics,calculate_metrics,
+                                   _get_current_request_rate, calculate_metrics_for_embeddings,
+                                   TaskType,get_request,check_goodput_args,process_one_metric,
+                                   save_to_pytorch_benchmark_format,add_cli_args)
 from vllm_omni.benchmarks.datasets import get_omni_samples
 from vllm.benchmarks.lib.endpoint_request_func import RequestFuncInput,RequestFuncOutput
 
@@ -63,261 +65,25 @@ class MixBenchmarkMetrics(BenchmarkMetrics):
     audio_throughput: float
     total_text_input: int
 
-
-
-def _get_current_request_rate(
-    ramp_up_strategy: Optional[Literal["linear", "exponential"]],
-    ramp_up_start_rps: Optional[int],
-    ramp_up_end_rps: Optional[int],
-    request_index: int,
-    total_requests: int,
-    request_rate: float,
-) -> float:
-    if (ramp_up_strategy and ramp_up_start_rps is not None
-            and ramp_up_end_rps is not None):
-        progress = request_index / max(total_requests - 1, 1)
-        if ramp_up_strategy == "linear":
-            increase = (ramp_up_end_rps - ramp_up_start_rps) * progress
-            return ramp_up_start_rps + increase
-        elif ramp_up_strategy == "exponential":
-            ratio = ramp_up_end_rps / ramp_up_start_rps
-            return ramp_up_start_rps * (ratio**progress)
-        else:
-            raise ValueError(f"Unknown ramp-up strategy: {ramp_up_strategy}")
-    return request_rate
-
-
-def calculate_metrics_for_embeddings(
-        outputs: list[MixRequestFuncOutput], dur_s: float,
-        selected_percentiles: list[float]) -> EmbedBenchmarkMetrics:
-    """Calculate the metrics for the embedding requests.
-
-    Args:
-        outputs: The outputs of the requests.
-        dur_s: The duration of the benchmark.
-        selected_percentiles: The percentiles to select.
-
-    Returns:
-        The calculated benchmark metrics.
-    """
-    total_input = 0
-    completed = 0
-    e2els: list[float] = []
-    for i in range(len(outputs)):
-        if outputs[i].success:
-            e2els.append(outputs[i].latency)
-            completed += 1
-            total_input += outputs[i].prompt_len
-
-    if completed == 0:
-        warnings.warn(
-            "All requests failed. This is likely due to a misconfiguration "
-            "on the benchmark arguments.",
-            stacklevel=2)
-    metrics = EmbedBenchmarkMetrics(
-        completed=completed,
-        total_input=total_input,
-        request_throughput=completed / dur_s,
-        total_token_throughput=total_input / dur_s,
-        mean_e2el_ms=np.mean(e2els or 0) * 1000,
-        std_e2el_ms=np.std(e2els or 0) * 1000,
-        median_e2el_ms=np.median(e2els or 0) * 1000,
-        percentiles_e2el_ms=[(p, np.percentile(e2els or 0, p) * 1000)
-                             for p in selected_percentiles],
-    )
-    return metrics
-
-
-def calculate_metrics(
-    input_requests: list[SampleRequest],
+async def patched_metrics(
+        input_requests: list[SampleRequest],
     outputs: list[RequestFuncOutput],
     dur_s: float,
     tokenizer: PreTrainedTokenizerBase,
     selected_percentiles: list[float],
-    goodput_config_dict: dict[str, float],
-) -> tuple[MixBenchmarkMetrics, list[int]]:
-    """Calculate the metrics for the benchmark.
-
-    Args:
-        input_requests: The input requests.
-        outputs: The outputs of the requests.
-        dur_s: The duration of the benchmark.
-        tokenizer: The tokenizer to use.
-        selected_percentiles: The percentiles to select.
-        goodput_config_dict: The goodput configuration.
-
-    Returns:
-        A tuple of the benchmark metrics and the actual output lengths.
-    """
-    actual_output_lens: list[int] = []
-    total_input = 0
-    total_text_input = 0
-    completed = 0
+    goodput_config_dict: dict[str, float]):
+    metrics, actual_output_lens = calculate_metrics(input_requests=input_requests,
+            outputs=outputs,
+            dur_s=dur_s,
+            tokenizer=tokenizer,
+            selected_percentiles=selected_percentiles,
+            goodput_config_dict=goodput_config_dict,)
     audio_completed = 0
-    good_completed = 0
-    itls: list[float] = []
-    tpots: list[float] = []
-    all_tpots: list[float] = []
-    ttfts: list[float] = []
-    e2els: list[float] = []
     for i in range(len(outputs)):
         if outputs[i].success:
-            output_len = outputs[i].output_tokens
-
-            if not output_len:
-                # We use the tokenizer to count the number of output tokens
-                # for some serving backends instead of looking at
-                # len(outputs[i].itl) since multiple output tokens may be
-                # bundled together
-                # Note : this may inflate the output token count slightly
-                output_len = len(
-                    tokenizer(outputs[i].generated_text,
-                              add_special_tokens=False).input_ids)
-            actual_output_lens.append(output_len)
-            total_text_input += input_requests[i].prompt_len
-            total_input += outputs[i].prompt_tokens
-            tpot = 0
-            if output_len > 1:
-                latency_minus_ttft = outputs[i].latency - outputs[i].ttft
-                tpot = latency_minus_ttft / (output_len - 1)
-                tpots.append(tpot)
-            # Note: if output_len <= 1, we regard tpot as 0 for goodput
-            all_tpots.append(tpot)
-            itls += outputs[i].itl
-            ttfts.append(outputs[i].ttft)
-            e2els.append(outputs[i].latency)
-            completed += 1
             audio_completed += outputs[i].output_audio_num
-        else:
-            actual_output_lens.append(0)
-
-    if goodput_config_dict:
-        valid_metrics = []
-        slo_values = []
-
-        if "ttft" in goodput_config_dict:
-            valid_metrics.append(ttfts)
-            slo_values.append(goodput_config_dict["ttft"] /
-                              MILLISECONDS_TO_SECONDS_CONVERSION)
-        if "tpot" in goodput_config_dict:
-            valid_metrics.append(all_tpots)
-            slo_values.append(goodput_config_dict["tpot"] /
-                              MILLISECONDS_TO_SECONDS_CONVERSION)
-        if "e2el" in goodput_config_dict:
-            valid_metrics.append(e2els)
-            slo_values.append(goodput_config_dict["e2el"] /
-                              MILLISECONDS_TO_SECONDS_CONVERSION)
-
-        for req_metric in zip(*valid_metrics):
-            is_good_req = all([s >= r for s, r in zip(slo_values, req_metric)])
-            if is_good_req:
-                good_completed += 1
-
-    if completed == 0:
-        warnings.warn(
-            "All requests failed. This is likely due to a misconfiguration "
-            "on the benchmark arguments.",
-            stacklevel=2)
-
-    # Calculate max output tokens per second metric
-    max_output_tokens_per_s = 0.0
-    max_concurrent_requests = 0
-
-    # Find the time range across all successful requests
-    successful_outputs = [output for output in outputs if output.success]
-    failed_outputs = [output for output in outputs if not output.success]
-    if successful_outputs:
-        min_start_time = min(output.start_time
-                             for output in successful_outputs)
-        max_end_time = max(output.start_time + output.latency
-                           for output in successful_outputs)
-
-        # Create second buckets (ceiling to ensure we capture all time)
-        duration_seconds = int(np.ceil(max_end_time - min_start_time)) + 1
-        tokens_per_second = np.zeros(duration_seconds)
-        concurrent_requests_per_second = np.zeros(duration_seconds)
-
-        for i, output in enumerate(successful_outputs):
-            # Calculate token generation timestamp using
-            # start_time, ttft, and itl
-            token_times = [output.start_time + output.ttft]
-            current_time = token_times[0]
-            for itl_value in output.itl:
-                current_time += itl_value
-                token_times.append(current_time)
-
-            # Add tokens to second buckets
-            for token_time in token_times:
-                second_bucket = int(token_time - min_start_time)
-                if 0 <= second_bucket < duration_seconds:
-                    tokens_per_second[second_bucket] += 1
-
-            # Track concurrent requests for each second this request was active
-            request_start_second = int(output.start_time - min_start_time)
-            request_end_second = int((output.start_time + output.latency) -
-                                     min_start_time)
-
-            for second in range(request_start_second, request_end_second + 1):
-                concurrent_requests_per_second[second] += 1
-
-        # Find the maximum tokens per second and corresponding
-        # concurrent requests
-        if len(tokens_per_second) > 0:
-            max_output_tokens_per_s = float(np.max(tokens_per_second))
-            max_concurrent_requests = int(
-                np.max(concurrent_requests_per_second))
-
-        if TERM_PLOTLIB_AVAILABLE:
-            import termplotlib as tpl
-            fig = tpl.figure()
-            fig.plot(np.arange(len(tokens_per_second)),
-                     tokens_per_second,
-                     title="Output tokens per second")
-            fig.plot(np.arange(len(concurrent_requests_per_second)),
-                     concurrent_requests_per_second,
-                     title="Concurrent requests per second")
-            fig.show()
-        else:
-            print("tip: install termplotlib and gnuplot to plot the metrics")
-
-    metrics = MixBenchmarkMetrics(
-        completed=completed,
-        failed=len(failed_outputs),
-        total_input=total_input,
-        total_text_input=total_text_input,
-        total_output=sum(actual_output_lens),
-        request_throughput=completed / dur_s,
-        request_goodput=good_completed / dur_s,
-        output_throughput=sum(actual_output_lens) / dur_s,
-        audio_throughput=audio_completed / dur_s,
-        total_token_throughput=(total_input + sum(actual_output_lens)) / dur_s,
-        mean_ttft_ms=np.mean(ttfts or 0) *
-        1000,  # ttfts is empty if streaming is not supported by the endpoint
-        std_ttft_ms=np.std(ttfts or 0) * 1000,
-        median_ttft_ms=np.median(ttfts or 0) * 1000,
-        percentiles_ttft_ms=[(p, np.percentile(ttfts or 0, p) * 1000)
-                             for p in selected_percentiles],
-        mean_tpot_ms=np.mean(tpots or 0) * 1000,
-        std_tpot_ms=np.std(tpots or 0) * 1000,
-        median_tpot_ms=np.median(tpots or 0) * 1000,
-        percentiles_tpot_ms=[(p, np.percentile(tpots or 0, p) * 1000)
-                             for p in selected_percentiles],
-        mean_itl_ms=np.mean(itls or 0) * 1000,
-        std_itl_ms=np.std(itls or 0) * 1000,
-        median_itl_ms=np.median(itls or 0) * 1000,
-        percentiles_itl_ms=[(p, np.percentile(itls or 0, p) * 1000)
-                            for p in selected_percentiles],
-        mean_e2el_ms=np.mean(e2els or 0) * 1000,
-        std_e2el_ms=np.std(e2els or 0) * 1000,
-        median_e2el_ms=np.median(e2els or 0) * 1000,
-        percentiles_e2el_ms=[(p, np.percentile(e2els or 0, p) * 1000)
-                             for p in selected_percentiles],
-        max_output_tokens_per_s=max_output_tokens_per_s,
-        max_concurrent_requests=max_concurrent_requests,
-    )
-
+    metrics.audio_throughput = audio_completed / dur_s
     return metrics, actual_output_lens
-
 
 async def benchmark(
     endpoint_type: str,
@@ -615,38 +381,6 @@ async def benchmark(
 
     if rps_change_events:
         result["rps_change_events"] = rps_change_events
-
-    def process_one_metric(
-        # E.g., "ttft"
-        metric_attribute_name: str,
-        # E.g., "TTFT"
-        metric_name: str,
-        # E.g., "Time to First Token"
-        metric_header: str,
-    ):
-        # This function prints and adds statistics of the specified
-        # metric.
-        if metric_attribute_name not in selected_percentile_metrics:
-            return
-        print("{s:{c}^{n}}".format(s=metric_header, n=50, c='-'))
-        print("{:<40} {:<10.2f}".format(
-            f"Mean {metric_name} (ms):",
-            getattr(metrics, f"mean_{metric_attribute_name}_ms")))
-        print("{:<40} {:<10.2f}".format(
-            f"Median {metric_name} (ms):",
-            getattr(metrics, f"median_{metric_attribute_name}_ms")))
-        result[f"mean_{metric_attribute_name}_ms"] = getattr(
-            metrics, f"mean_{metric_attribute_name}_ms")
-        result[f"median_{metric_attribute_name}_ms"] = getattr(
-            metrics, f"median_{metric_attribute_name}_ms")
-        result[f"std_{metric_attribute_name}_ms"] = getattr(
-            metrics, f"std_{metric_attribute_name}_ms")
-        for p, value in getattr(metrics,
-                                f"percentiles_{metric_attribute_name}_ms"):
-            p_word = str(int(p)) if int(p) == p else str(p)
-            print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):",
-                                            value))
-            result[f"p{p_word}_{metric_attribute_name}_ms"] = value
 
     if task_type == TaskType.GENERATION:
         process_one_metric("ttft", "TTFT", "Time to First Token")
