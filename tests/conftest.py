@@ -13,12 +13,14 @@ import psutil
 import soundfile as sf
 import torch
 import yaml
+import json
 import speech_recognition as sr
 import numpy as np
 from vllm.logger import init_logger
 from vllm.utils import get_open_port
 from collections.abc import Generator
 from typing import Any
+from datetime import datetime
 
 import pytest
 from vllm.distributed.parallel_state import cleanup_dist_env_and_memory
@@ -267,6 +269,40 @@ def modify_stage_config(
         yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True, indent=2)
 
     return output_path
+
+def run_benchmark(args: list) -> Any:
+    """Generate synthetic image with random values."""
+    current_dt = datetime.now().strftime("%Y%m%d-%H%M%S")
+    result_filename = f"result_{current_dt}.json"
+    if "--result-filename" in args:
+        print(f"The result file will be overwritten by {result_filename}")
+    command = ["vllm-omni",
+                "bench",
+                "serve",
+                "--omni"] + args + ["--result-filename", result_filename]
+    process = subprocess.Popen(command,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE,
+                              text=True,
+                              bufsize=1,
+                              universal_newlines=True)
+
+    for line in iter(process.stdout.readline, ''):
+        print(line, end=' ')
+
+
+    if "--result-dir" in args:
+        index = args.index("--result-dir")
+        result_dir = args[index + 1]
+    else:
+        result_dir = "./"
+
+    with open(os.path.join(result_dir, result_filename), 'r', encoding='utf-8') as f:
+        result = json.load(f)
+    return result
+
+
+
 
 
 class OmniServer:

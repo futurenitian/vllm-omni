@@ -126,7 +126,7 @@ class OmniRandomMultiModalDataset(RandomMultiModalDataset):
 
         buffer = io.BytesIO()
 
-        sf.write(buffer, audio_np.T, sample_rate, format="mp3")
+        sf.write(buffer, audio_np.T, sample_rate, format="wav")
 
         buffer.seek(0)
         audio_bytes = buffer.read()
