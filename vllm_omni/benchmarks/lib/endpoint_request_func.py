@@ -23,13 +23,12 @@ AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 @dataclass
 class MixRequestFuncOutput(RequestFuncOutput):
     output_audio_num: int = None
-    prompt_tokens: int = None
 
 async def async_request_openai_chat_completions(
     request_func_input: RequestFuncInput,
     session: aiohttp.ClientSession,
     pbar: Optional[tqdm] = None,
-) -> RequestFuncOutput:
+) -> MixRequestFuncOutput:
     api_url = request_func_input.api_url
     assert api_url.endswith(("chat/completions", "profile")), (
         "OpenAI Chat Completions API URL must end with 'chat/completions'.")
@@ -77,7 +76,7 @@ async def async_request_openai_chat_completions(
         headers["x-request-id"] = request_func_input.request_id
 
     output = MixRequestFuncOutput()
-    output.prompt_len = request_func_input.prompt_len
+    output.prompt_len = 0
     output.ttft = 0.0
     st = time.perf_counter()
     output.start_time = st
@@ -95,7 +94,7 @@ async def async_request_openai_chat_completions(
                         output.output_audio_num += 1
                 usage = data.get("usage")
                 output.output_tokens = usage.get("completion_tokens")
-                output.prompt_tokens = usage.get("prompt_tokens")
+                output.prompt_len = usage.get("prompt_tokens")
                 output.success = True
                 output.latency = time.perf_counter() - st
                 output.ttft = output.latency
