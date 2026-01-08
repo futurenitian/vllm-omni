@@ -138,6 +138,7 @@ def main(args: argparse.Namespace) -> dict[str, Any]:
     return asyncio.run(main_async(args))
 
 async def main_async(args: argparse.Namespace) -> dict[str, Any]:
+
     print(args)
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -163,6 +164,10 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
             raise ValueError("For exponential ramp-up, the start RPS cannot be 0.")
 
     label = args.label
+    model_id = args.model
+    model_name = args.served_model_name
+    tokenizer_id = args.tokenizer if args.tokenizer is not None else args.model
+    tokenizer_mode = args.tokenizer_mode
 
     if args.base_url is not None:
         api_url = f"{args.base_url}{args.endpoint}"
@@ -183,18 +188,6 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
             else:
                 raise ValueError("Invalid header format. Please use KEY=VALUE format.")
 
-    # Fetch model from server if not specified
-    if args.model is None:
-        print("Model not specified, fetching first model from server...")
-        model_name, model_id = await get_first_model_from_server(base_url, headers)
-        print(f"First model name: {model_name}, first model id: {model_id}")
-    else:
-        model_name = args.served_model_name
-        model_id = args.model
-
-    tokenizer_id = args.tokenizer if args.tokenizer is not None else model_id
-    tokenizer_mode = args.tokenizer_mode
-
     tokenizer = get_tokenizer(
         tokenizer_id,
         tokenizer_mode=tokenizer_mode,
@@ -206,20 +199,6 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
             "Please specify '--dataset-name' and the corresponding "
             "'--dataset-path' if required."
         )
-
-    # Map general --input-len and --output-len to all dataset-specific arguments
-    if args.input_len is not None:
-        args.random_input_len = args.input_len
-        args.sonnet_input_len = args.input_len
-
-    if args.output_len is not None:
-        args.random_output_len = args.output_len
-        args.sonnet_output_len = args.output_len
-        args.sharegpt_output_len = args.output_len
-        args.custom_output_len = args.output_len
-        args.hf_output_len = args.output_len
-        args.spec_bench_output_len = args.output_len
-        args.prefix_repetition_output_len = args.output_len
 
     # when using random datasets, default to ignoring EOS
     # so generation runs to the requested length
