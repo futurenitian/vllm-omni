@@ -57,7 +57,7 @@ async def patched_metrics(
     return result
 
 async def patched_benchmark(
-endpoint_type: str,
+    endpoint_type: str,
     api_url: str,
     base_url: str,
     model_id: str,
@@ -106,11 +106,17 @@ endpoint_type: str,
 
     try:
         from vllm.benchmarks.serve import benchmark as original_benchmark
-        original_result = await original_benchmark(endpoint_type,api_url,base_url,model_id,
-    model_name,tokenizer,input_requests,logprobs,request_rate,burstiness,disable_tqdm,profile,
-    selected_percentile_metrics,selected_percentiles,ignore_eos,goodput_config_dict,max_concurrency,
-    lora_modules,extra_headers,extra_body,ramp_up_strategy,ramp_up_start_rps,
-    ramp_up_end_rps,ready_check_timeout_sec)
+        original_result = await original_benchmark(endpoint_type=endpoint_type,api_url=api_url,base_url=base_url,
+                                                   model_id=model_id,model_name=model_name,tokenizer=tokenizer,
+                                                   input_requests=input_requests,logprobs=logprobs,
+                                                   request_rate=request_rate,burstiness=burstiness,
+                                                   disable_tqdm=disable_tqdm,profile=profile,
+    selected_percentile_metrics=selected_percentile_metrics,selected_percentiles=selected_percentiles,
+                                                   ignore_eos=ignore_eos,goodput_config_dict=goodput_config_dict,
+                                                   max_concurrency=max_concurrency,
+    lora_modules=lora_modules,extra_headers=extra_headers,extra_body=extra_body,
+                                                   ramp_up_strategy=ramp_up_strategy,ramp_up_start_rps=ramp_up_start_rps,
+    ramp_up_end_rps=ramp_up_end_rps,ready_check_timeout_sec=ready_check_timeout_sec)
         return original_result, converted_outputs
 
     finally:
