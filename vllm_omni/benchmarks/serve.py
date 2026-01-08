@@ -29,8 +29,7 @@ from typing import Any, Literal
 import numpy as np
 
 from vllm_omni.benchmarks.lib.endpoint_request_func import (
-    OPENAI_COMPATIBLE_BACKENDS)
-from vllm_omni.benchmarks.lib.endpoint_request_func import ASYNC_REQUEST_FUNCS
+    OPENAI_COMPATIBLE_BACKENDS,ASYNC_REQUEST_FUNCS, MixRequestFuncOutput)
 
 from vllm.benchmarks.serve import (BenchmarkMetrics,EmbedBenchmarkMetrics,calculate_metrics,
                                    _get_current_request_rate, calculate_metrics_for_embeddings,
@@ -56,7 +55,30 @@ async def patched_metrics(
     return result
 
 async def patched_benchmark(
-        **kwargs
+endpoint_type: str,
+    api_url: str,
+    base_url: str,
+    model_id: str,
+    model_name: str,
+    tokenizer: PreTrainedTokenizerBase,
+    input_requests: list[SampleRequest],
+    logprobs: Optional[int],
+    request_rate: float,
+    burstiness: float,
+    disable_tqdm: bool,
+    profile: bool,
+    selected_percentile_metrics: list[str],
+    selected_percentiles: list[float],
+    ignore_eos: bool,
+    goodput_config_dict: dict[str, float],
+    max_concurrency: Optional[int],
+    lora_modules: Optional[Iterable[str]],
+    extra_headers: Optional[dict],
+    extra_body: Optional[dict],
+    ramp_up_strategy: Optional[Literal["linear", "exponential"]] = None,
+    ramp_up_start_rps: Optional[int] = None,
+    ramp_up_end_rps: Optional[int] = None,
+    ready_check_timeout_sec: int = 600,
 ):
     converted_outputs: List[Any] = []
     original_gather = asyncio.gather
@@ -82,7 +104,11 @@ async def patched_benchmark(
 
     try:
         from vllm.benchmarks.serve import benchmark as original_benchmark
-        original_result = await original_benchmark(**kwargs)
+        original_result = await original_benchmark(endpoint_type,api_url,base_url,model_id,
+    model_name,tokenizer,input_requests,logprobs,request_rate,burstiness,disable_tqdm,profile,
+    selected_percentile_metrics,selected_percentiles,ignore_eos,goodput_config_dict,max_concurrency,
+    lora_modules,extra_headers,extra_body,ramp_up_strategy,ramp_up_start_rps,
+    ramp_up_end_rps,ready_check_timeout_sec)
         return original_result, converted_outputs
 
     finally:
