@@ -18,7 +18,7 @@ AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 
 @dataclass
 class MixRequestFuncOutput(RequestFuncOutput):
-    audio_ttft: float
+    audio_ttft: float = 0.0
 
 
 async def async_request_openai_chat_completions(

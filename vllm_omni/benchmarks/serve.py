@@ -289,7 +289,8 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
 
     # Avoid GC processing "static" data - reduce pause times.
     freeze_gc_heap()
-
+    selected_percentile_metrics = percentile_metrics.split(",")
+    selected_percentiles = [float(p) for p in args.metric_percentiles.split(",")]
     benchmark_result, outputs = await patched_benchmark(
         task_type=task_type,
         endpoint_type=backend,
@@ -305,8 +306,8 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
         disable_tqdm=args.disable_tqdm,
         num_warmups=args.num_warmups,
         profile=args.profile,
-        selected_percentile_metrics=percentile_metrics.split(","),
-        selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
+        selected_percentile_metrics=selected_percentile_metrics,
+        selected_percentiles=selected_percentiles,
         ignore_eos=args.ignore_eos,
         goodput_config_dict=goodput_config_dict,
         max_concurrency=args.max_concurrency,
@@ -318,7 +319,8 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
         ramp_up_end_rps=args.ramp_up_end_rps,
         ready_check_timeout_sec=args.ready_check_timeout_sec,
     )
-    patched_result = await patched_metrics(outputs, [float(p) for p in args.metric_percentiles.split(",")])
+    patched_result = await patched_metrics(outputs,
+                                           selected_percentiles, selected_percentile_metrics)
     # Save config and results to json
     result_json: dict[str, Any] = {}
 
