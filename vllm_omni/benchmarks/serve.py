@@ -25,7 +25,8 @@ import random
 import shutil
 import sys
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Optional, List, Iterable
+from transformers import PreTrainedTokenizerBase
 import numpy as np
 
 from vllm_omni.benchmarks.lib.endpoint_request_func import (
@@ -36,6 +37,7 @@ from vllm.benchmarks.serve import (BenchmarkMetrics,EmbedBenchmarkMetrics,calcul
                                    TaskType,get_request,check_goodput_args,
                                    save_to_pytorch_benchmark_format,add_cli_args)
 from vllm_omni.benchmarks.datasets import get_omni_samples
+from vllm.benchmarks.datasets import SampleRequest
 from vllm.transformers_utils.tokenizer import get_tokenizer
 
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000
