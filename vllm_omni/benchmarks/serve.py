@@ -34,7 +34,7 @@ from vllm_omni.benchmarks.lib.endpoint_request_func import (
 
 from vllm.benchmarks.serve import (BenchmarkMetrics,EmbedBenchmarkMetrics,calculate_metrics,
                                    _get_current_request_rate, calculate_metrics_for_embeddings,
-                                   TaskType,get_request,check_goodput_args,get_first_model_from_server,
+                                   TaskType,get_request,check_goodput_args,
                                    save_to_pytorch_benchmark_format,add_cli_args)
 from vllm_omni.benchmarks.datasets import get_omni_samples
 from vllm.benchmarks.datasets import SampleRequest
@@ -54,9 +54,9 @@ async def patched_metrics(
     audio_completed = 0
     result = {}
     for i in range(len(outputs)):
-        if outputs[i].success:
+        if outputs[i] is not None and outputs[i].success:
             audio_completed += outputs[i].output_audio_num
-    result.audio_throughput = audio_completed / dur_s
+    result['audio_throughput'] = audio_completed / dur_s
     return result
 
 async def patched_benchmark(
@@ -103,9 +103,18 @@ async def patched_benchmark(
         print(f"import error: {e}")
         raise
 
-    async def intercepted_gather(*tasks, **gather_kwargs):
-        original_results = await original_gather(*tasks, **gather_kwargs)
-        converted_outputs.extend(original_results)
+    async def intercepted_gather(*tasks):
+        nonlocal benchmark_phase
+        if len(tasks) == num_warmups and benchmark_phase == "unknown":
+            benchmark_phase = "warmup"
+        else:
+            benchmark_phase = "main"
+
+        original_results = await original_gather(*tasks)
+
+        if benchmark_phase == "main":
+            converted_outputs.extend(original_results)
+
         return original_results
     asyncio.gather = intercepted_gather
 
@@ -285,10 +294,10 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
         ramp_up_end_rps=args.ramp_up_end_rps,
         ready_check_timeout_sec=args.ready_check_timeout_sec,
     )
-    patched_result = patched_metrics(outputs, benchmark_result['duration'])
+    patched_result = await patched_metrics(outputs, benchmark_result['duration'])
     print("{s:{c}^{n}}".format(s=' Supplemental result ', n=50, c='='))
     print("{:<40} {:<10.2f}".format("Audio throughput (num/s):",
-                                    patched_result['audio_throughput']))
+                                    patched_result.get('audio_throughput')))
     print("=" * 50)
     # Save config and results to json
     result_json: dict[str, Any] = {}
