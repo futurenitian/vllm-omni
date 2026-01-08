@@ -14,14 +14,13 @@ import io
 import logging
 import os
 import tempfile
-from collections.abc import Iterator, Mapping
-from typing import Any, cast, Dict
+from collections.abc import Mapping
+from typing import Any, Dict
 
 import cv2
 import numpy as np
 import soundfile as sf
 import torch
-import torchaudio
 from vllm.benchmarks.datasets import RandomMultiModalDataset, get_samples, process_image
 
 logger = logging.getLogger(__name__)

@@ -50,13 +50,36 @@ TERM_PLOTLIB_AVAILABLE = ((importlib.util.find_spec("termplotlib") is not None)
 
 async def patched_metrics(
     outputs: list[MixRequestFuncOutput],
-    dur_s: float):
-    audio_completed = 0
+    selected_percentiles: list[float],
+    selected_percentile_metrics: list[str],
+    audio_ttfts: list[float] = []):
     result = {}
+    if "ttft" not in selected_percentile_metrics:
+        return result
     for i in range(len(outputs)):
         if outputs[i] is not None and outputs[i].success:
-            audio_completed += outputs[i].output_audio_num
-    result['audio_throughput'] = audio_completed / dur_s
+            audio_ttfts.append(outputs[i].ttft)
+    mean_ttft_ms = np.mean(audio_ttfts or 0) * 1000,
+    std_ttft_ms = np.std(audio_ttfts or 0) * 1000,
+    median_ttft_ms = np.median(audio_ttfts or 0) * 1000,
+    percentiles_ttft_ms = [(p, np.percentile(audio_ttfts or 0, p) * 1000)
+                           for p in selected_percentiles]
+
+    print("{s:{c}^{n}}".format(s=' Supplemental result ', n=50, c='='))
+    print("{s:{c}^{n}}".format(s="Time to audio First Token", n=50, c='-'))
+    print("{:<40} {:<10.2f}".format(
+        f"Mean Audio TTFT  (ms):",mean_ttft_ms))
+    print("{:<40} {:<10.2f}".format(
+        f"Median Audio TTFT (ms):",median_ttft_ms))
+    result[f"mean_audio_ttft_ms"] = mean_ttft_ms
+    result[f"median_audio_ttft_ms"] = median_ttft_ms
+    result[f"std_audio_ttft_ms"] = std_ttft_ms
+    for p, value in percentiles_ttft_ms:
+        p_word = str(int(p)) if int(p) == p else str(p)
+        print("{:<40} {:<10.2f}".format(f"P{p_word} Audio TTFT (ms):",
+                                        value))
+        result[f"p{p_word}_audio_ttft_ms"] = value
+    print("=" * 50)
     return result
 
 async def patched_benchmark(
@@ -90,6 +113,7 @@ async def patched_benchmark(
     converted_outputs: List[Any] = []
     original_gather = asyncio.gather
     original_async_funcs = {}
+    benchmark_phase = "unknown"
     try:
         import vllm.benchmarks.serve as benchmark_module
         if hasattr(benchmark_module, 'ASYNC_REQUEST_FUNCS'):
@@ -103,14 +127,14 @@ async def patched_benchmark(
         print(f"import error: {e}")
         raise
 
-    async def intercepted_gather(*tasks):
+    async def intercepted_gather(*tasks, **gather_kwargs):
         nonlocal benchmark_phase
         if len(tasks) == num_warmups and benchmark_phase == "unknown":
             benchmark_phase = "warmup"
         else:
             benchmark_phase = "main"
 
-        original_results = await original_gather(*tasks)
+        original_results = await original_gather(*tasks, **gather_kwargs)
 
         if benchmark_phase == "main":
             converted_outputs.extend(original_results)
@@ -294,11 +318,7 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
         ramp_up_end_rps=args.ramp_up_end_rps,
         ready_check_timeout_sec=args.ready_check_timeout_sec,
     )
-    patched_result = await patched_metrics(outputs, benchmark_result['duration'])
-    print("{s:{c}^{n}}".format(s=' Supplemental result ', n=50, c='='))
-    print("{:<40} {:<10.2f}".format("Audio throughput (num/s):",
-                                    patched_result.get('audio_throughput')))
-    print("=" * 50)
+    patched_result = await patched_metrics(outputs, [float(p) for p in args.metric_percentiles.split(",")])
     # Save config and results to json
     result_json: dict[str, Any] = {}
 

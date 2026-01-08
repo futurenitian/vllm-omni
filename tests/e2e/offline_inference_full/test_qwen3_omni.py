@@ -54,3 +54,56 @@ def test_text_to_text_001(test_config) -> None:
         assert "Beijing" in stage_outputs[0].request_output[0].outputs[0].text, "The generated text is incorrect."
 
 
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_text_to_text_001(test_config) -> None:
+    """Test processing text, generating text output via OpenAI API."""
+    model, stage_config_path = test_config
+    with OmniRunner(model, seed=42, stage_configs_path=stage_config_path, stage_init_timeout=300) as runner:
+        # Prepare inputs
+        question = "What is the capital of China?"
+        start_time = time.perf_counter()
+        outputs = runner.generate_multimodal(
+            prompts=question,
+            modalities=["text"]
+        )
+
+        #Find and verify text output (thinker stage)
+        stage_outputs = list()
+        for stage_output in outputs:
+            stage_outputs.append(stage_output)
+
+        # Verify E2E
+        print(f"the request e2e is: {time.perf_counter() - start_time}")
+        # TODO: Verify the E2E latency after confirmation baseline.
+
+        # Verify only output text
+        assert len(stage_outputs) == 1, "The generated content includes more than just text."
+
+        # Verify text output success
+        assert stage_outputs[0].final_output_type == "text", "No text output is generated"
+        assert "Beijing" in stage_outputs[0].request_output[0].outputs[0].text, "The generated text is incorrect."
+
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_mix_to_text_audio_002(test_config) -> None:
+    """Test processing text, audio, video, image, generating text and audio output via OpenAI API."""
+    model, stage_config_path = test_config
+    with OmniRunner(model, seed=42, stage_configs_path=stage_config_path, stage_init_timeout=300) as runner:
+        command = ["python",
+                   "example/offline_inference/qwen3_omni/end2end.py",
+                   "--num-prompts", 100, "--num-frames", 300]
+        process = subprocess.Popen(command,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE,
+                                   text=True,
+                                   bufsize=1,
+                                   universal_newlines=True)
+
+        for line in iter(process.stdout.readline, ''):
+            print(line, end=' ')
