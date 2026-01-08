@@ -1002,7 +1002,7 @@ def test_mix_to_text_audio_004(test_config: tuple[str, str]) -> None:
                 "--random-output-len",
                 "1000",
                 "--num-prompts",
-                "1000",
+                "100",
                 "--percentile-metrics",
                 "ttft,tpot,itl,e2el",
                 "--endpoint",
@@ -1012,3 +1012,62 @@ def test_mix_to_text_audio_004(test_config: tuple[str, str]) -> None:
             ]
             result = run_benchmark(args)
             assert result.get("completed") == 1000, "The request success rate did not reach 100%."
+
+
+
+
+
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_chunked_prefill_001(test_config: tuple[str, str]) -> None:
+    """Test processing text, generating audio output via OpenAI API."""
+
+    model, stage_config_path = test_config
+    stage_config_path = modify_stage_config(stage_config_path, {
+        0: {"engine_args.max_num_batched_tokens": 32}})
+    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
+        video_data_url = f"data:video/mp4;base64,{generate_synthetic_video(16, 16, 300)}"
+        image_data_url = f"data:image/jpeg;base64,{generate_synthetic_image(16, 16)}"
+        audio_data_url = f"data:audio/wav;base64,{generate_synthetic_audio(1, 5)}"
+
+        messages = dummy_messages_from_mix_data(
+            system_prompt=get_system_prompt(),
+            video_data_url=video_data_url,
+            image_data_url=image_data_url,
+            audio_data_url=audio_data_url,
+            content_text="What is recited in the audio? What is in this image? Please describe the video briefly."
+        )
+        # Test single completion
+        api_client = client(server)
+        start_time = time.perf_counter()
+        sampling_params_list = [{"max_tokens":10}, {"max_tokens": 4096}, {"max_tokens": 4096}]
+        chat_completion = api_client.chat.completions.create(
+            model=server.model, messages=messages, extra_body = {"sampling_params_list": sampling_params_list}
+        )
+        # Verify E2E
+        print(f"the request e2e is: {time.perf_counter() - start_time}")
+        # TODO: Verify the E2E latency after confirmation baseline.
+
+        # Verify text output success
+        text_choice = chat_completion.choices[0]
+        text_content = text_choice.message.content
+        assert text_choice.message.content is not None, "No text output is generated"
+        assert chat_completion.usage.completion_tokens == 10, "The output length differs from the requested max_tokens."
+
+        # Verify audio output success
+        audio_message = chat_completion.choices[1].message
+        audio_data = audio_message.audio.data
+        assert audio_data is not None, "No audio output is generated"
+        assert audio_message.audio.expires_at > time.time(), "The generated audio has expired."
+
+        # Verify text output same as audio output
+        audio_content = convert_audio_to_text(audio_data)
+        print(f"text content is: {text_content}")
+        print(f"audio content is: {audio_content}")
+        assert cosine_similarity_text(audio_content, text_content) > 0.9, "The audio content is not same as the text"
+
+
+

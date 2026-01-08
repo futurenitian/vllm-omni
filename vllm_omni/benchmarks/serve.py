@@ -59,9 +59,9 @@ async def patched_metrics(
     for i in range(len(outputs)):
         if outputs[i] is not None and outputs[i].success:
             audio_ttfts.append(outputs[i].audio_ttft)
-    mean_ttft_ms = np.mean(audio_ttfts or 0) * 1000,
-    std_ttft_ms = np.std(audio_ttfts or 0) * 1000,
-    median_ttft_ms = np.median(audio_ttfts or 0) * 1000,
+    mean_ttft_ms = np.mean(audio_ttfts or 0) * 1000
+    std_ttft_ms = np.std(audio_ttfts or 0) * 1000
+    median_ttft_ms = np.median(audio_ttfts or 0) * 1000
     percentiles_ttft_ms = [(p, np.percentile(audio_ttfts or 0, p) * 1000)
                            for p in selected_percentiles]
 
