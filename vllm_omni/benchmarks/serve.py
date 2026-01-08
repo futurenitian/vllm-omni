@@ -51,14 +51,14 @@ TERM_PLOTLIB_AVAILABLE = ((importlib.util.find_spec("termplotlib") is not None)
 async def patched_metrics(
     outputs: list[MixRequestFuncOutput],
     selected_percentiles: list[float],
-    selected_percentile_metrics: list[str],
-    audio_ttfts: list[float] = []):
+    selected_percentile_metrics: list[str]):
+    audio_ttfts = []
     result = {}
     if "ttft" not in selected_percentile_metrics:
         return result
     for i in range(len(outputs)):
         if outputs[i] is not None and outputs[i].success:
-            audio_ttfts.append(outputs[i].ttft)
+            audio_ttfts.append(outputs[i].audio_ttft)
     mean_ttft_ms = np.mean(audio_ttfts or 0) * 1000,
     std_ttft_ms = np.std(audio_ttfts or 0) * 1000,
     median_ttft_ms = np.median(audio_ttfts or 0) * 1000,
