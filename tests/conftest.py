@@ -7,10 +7,10 @@ from typing import Any
 
 import psutil
 import pytest
-import speech_recognition as sr
 import sys
 import time
 import torch
+import whisper
 import yaml
 from vllm.logger import init_logger
 from vllm.utils import get_open_port
@@ -118,17 +118,12 @@ def convert_audio_to_text(audio_data):
         audio_file.write(audio_data)
 
     print(f"audio data is saved: {output_path}")
-    recognizer = sr.Recognizer()
-    with sr.AudioFile(output_path) as source:
-        audio_data = recognizer.record(source)
-
-        print("Start voice recognition...")
-
-        text = recognizer.recognize_sphinx(audio_data)
-        if text:
-            return text
-        else:
-            return ""
+    model = whisper.load_model("base")
+    text = model.transcribe(output_path)["text"]
+    if text:
+        return text
+    else:
+        return ""
 
 
 def modify_stage_config(
