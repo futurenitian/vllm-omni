@@ -1,103 +1,114 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 """The request function for API endpoints."""
 
-import io
-import json
 import os
 import sys
 import time
+import json
 import traceback
-from collections.abc import Awaitable
-from dataclasses import dataclass, field
-from typing import Optional, Protocol, Union
+from dataclasses import dataclass
+from typing import Optional,Literal
 import aiohttp
 from tqdm.asyncio import tqdm
 from vllm.benchmarks.lib.endpoint_request_func import (async_request_openai_completions,async_request_openai_audio,
-                                                       async_request_openai_embeddings, RequestFunc,
-                                                       RequestFuncInput,
-                                                       RequestFuncOutput,StreamedResponseHandler)
+                                                       async_request_openai_embeddings, RequestFunc,_update_payload_common,
+                                                       RequestFuncInput,_validate_api_url,_get_chat_content,
+                                                       RequestFuncOutput,StreamedResponseHandler,_update_headers_common)
 
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 
 @dataclass
 class MixRequestFuncOutput(RequestFuncOutput):
-    output_audio_num: int = None
+    audio_ttft: float = 0.0
+
 
 async def async_request_openai_chat_completions(
     request_func_input: RequestFuncInput,
     session: aiohttp.ClientSession,
-    pbar: Optional[tqdm] = None,
+    pbar: tqdm | None = None,
+    mm_position: Literal["first", "last"] = "last",
 ) -> MixRequestFuncOutput:
     api_url = request_func_input.api_url
-    assert api_url.endswith(("chat/completions", "profile")), (
-        "OpenAI Chat Completions API URL must end with 'chat/completions'.")
+    _validate_api_url(api_url, "OpenAI Chat Completions API", "chat/completions")
 
-    content = [{"type": "text", "text": request_func_input.prompt}]
-    if request_func_input.multi_modal_content:
-        mm_content = request_func_input.multi_modal_content
-        if isinstance(mm_content, list):
-            content.extend(mm_content)
-        elif isinstance(mm_content, dict):
-            content.append(mm_content)
-        else:
-            raise TypeError(
-                "multi_modal_content must be a dict or list[dict] "
-                "for openai-chat"
-            )
+    content = _get_chat_content(request_func_input, mm_position=mm_position)
+
     payload = {
-        "model":
-        request_func_input.model_name
-        if request_func_input.model_name else request_func_input.model,
+        "model": request_func_input.model_name
+        if request_func_input.model_name
+        else request_func_input.model,
         "messages": [
-            {
-                "role": "user",
-                "content": content
-            },
+            {"role": "user", "content": content},
         ],
-        "temperature":
-        0.0,
-        "max_completion_tokens":
-        request_func_input.output_len,
-        "stream":
-        False
+        "temperature": 0.0,
+        "max_completion_tokens": request_func_input.output_len,
+        "stream": True,
+        "stream_options": {
+            "include_usage": True,
+        },
     }
-    if request_func_input.ignore_eos:
-        payload["ignore_eos"] = request_func_input.ignore_eos
-    if request_func_input.extra_body:
-        payload.update(request_func_input.extra_body)
+    _update_payload_common(payload, request_func_input)
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
     }
-    if request_func_input.extra_headers:
-        headers |= request_func_input.extra_headers
-    if request_func_input.request_id:
-        headers["x-request-id"] = request_func_input.request_id
+    _update_headers_common(headers, request_func_input)
 
     output = MixRequestFuncOutput()
-    output.prompt_len = 0
-    output.ttft = 0.0
+    output.prompt_len = request_func_input.prompt_len
+
+    generated_text = ""
+    ttft = 0.0
     st = time.perf_counter()
     output.start_time = st
-    output.output_audio_num = 0
+    most_recent_timestamp = st
     try:
-        async with session.post(url=api_url, json=payload,
-                                headers=headers) as response:
+        async with session.post(url=api_url, json=payload, headers=headers) as response:
             if response.status == 200:
-                data = await response.json()
-                choices = data.get("choices")
-                for choice in choices:
-                    content = choice["message"].get("content")
-                    output.generated_text += content or ""
-                    if choice["message"].get("audio"):
-                        output.output_audio_num += 1
-                usage = data.get("usage")
-                output.output_tokens = usage.get("completion_tokens")
-                output.prompt_len = usage.get("prompt_tokens")
+                handler = StreamedResponseHandler()
+                async for chunk_bytes in response.content.iter_any():
+                    chunk_bytes = chunk_bytes.strip()
+                    if not chunk_bytes:
+                        continue
+
+                    messages = handler.add_chunk(chunk_bytes)
+                    for message in messages:
+                        # NOTE: SSE comments (often used as pings) start with
+                        # a colon. These are not JSON data payload and should
+                        # be skipped.
+                        if message.startswith(":"):
+                            continue
+
+                        chunk = message.removeprefix("data: ")
+
+                        if chunk != "[DONE]":
+                            timestamp = time.perf_counter()
+                            data = json.loads(chunk)
+
+                            if choices := data.get("choices"):
+                                content = choices[0]["delta"].get("content")
+                                # First token
+                                if ttft == 0.0:
+                                    ttft = timestamp - st
+                                    output.ttft = ttft
+
+                                # Decoding phase
+                                else:
+                                    modality = data.get("modality")
+                                    if modality == "text":
+                                        output.itl.append(timestamp - most_recent_timestamp)
+                                    elif modality == "audio":
+                                        output.audio_ttft = timestamp - most_recent_timestamp
+
+                                generated_text += content or ""
+                            elif usage := data.get("usage"):
+                                output.output_tokens = usage.get("completion_tokens")
+
+                            most_recent_timestamp = timestamp
+
+                output.generated_text = generated_text
                 output.success = True
-                output.latency = time.perf_counter() - st
-                output.ttft = output.latency
+                output.latency = most_recent_timestamp - st
             else:
                 output.error = response.reason or ""
                 output.success = False
