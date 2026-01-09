@@ -10,6 +10,13 @@ generation and validation.
 
 import os
 import time
+import base64
+import io
+import soundfile as sf
+import tempfile
+import cv2
+import numpy as np
+from PIL import Image
 from pathlib import Path
 import pytest
 from tests.conftest import (
@@ -58,18 +65,51 @@ def generate_mixed_multimodal_data():
     for _ in range(TEST_PARAMS["video_num"]):
         w, h = TEST_PARAMS["video_pixel"]
         b64 = generate_synthetic_video(width=w, height=h, num_frames=TEST_PARAMS["video_frames"])
-        video_data.append(f"data:video/mp4;base64,{b64}")
+        video_bytes = base64.b64decode(b64)
+        # write to temp file and read frames via cv2
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp.write(video_bytes)
+            tmp_path = tmp.name
+        cap = cv2.VideoCapture(tmp_path)
+        frames = []
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # convert BGR to RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(frame)
+        cap.release()
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+        if len(frames) == 0:
+            # fallback: empty array
+            video_arr = np.zeros((0, h, w, 3), dtype=np.uint8)
+        else:
+            video_arr = np.stack(frames, axis=0)
+        video_data.append(video_arr)
 
     image_data = []
     for _ in range(TEST_PARAMS["image_num"]):
         w, h = TEST_PARAMS["image_pixel"]
         b64 = generate_synthetic_image(width=w, height=h)
-        image_data.append(f"data:image/jpeg;base64,{b64}")
+        image_bytes = base64.b64decode(b64)
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image_data.append(img)
 
     audio_data = []
     for _ in range(TEST_PARAMS["audio_num"]):
         b64 = generate_synthetic_audio(duration=TEST_PARAMS["audio_duration"], num_channels=TEST_PARAMS["audio_channels"])
-        audio_data.append(f"data:audio/wav;base64,{b64}")
+        audio_bytes = base64.b64decode(b64)
+        # Convert bytes to (numpy array, sample_rate) which vLLM multimodal parser expects
+        try:
+            arr, sr = sf.read(io.BytesIO(audio_bytes), dtype="float32")
+        except Exception:
+            # Fallback: append raw bytes if reading fails
+            arr, sr = audio_bytes, None
+        audio_data.append((arr, sr))
 
     return video_data, image_data, audio_data
 
@@ -104,9 +144,9 @@ def test_mix_to_text_audio_001(test_config) -> None:
             outputs = list(
                 runner.generate_multimodal(
                     prompts=prompt,
-                    videos=videos,
-                    images=images,
-                    audios=audios,
+                    videos=[videos],
+                    images=[images],
+                    audios=[audios],
                     modalities=["text", "audio"],
                     mm_processor_kwargs={"use_audio_in_video": True},
                 )
