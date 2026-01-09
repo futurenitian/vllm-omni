@@ -50,6 +50,10 @@ def get_system_prompt():
     }
 
 
+@pytest.mark.omni
+@pytest.mark.gpu
+@pytest.mark.H100
+@multi_gpu_test(num_gpus=2)
 @pytest.mark.parametrize("test_config", test_params)
 def test_text_to_text_001(test_config: tuple[str, str]) -> None:
     """Test processing text, generating text output via OpenAI API."""
