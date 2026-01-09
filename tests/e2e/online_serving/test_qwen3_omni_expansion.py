@@ -63,7 +63,7 @@ def test_text_to_text_001(test_config: tuple[str, str]) -> None:
         api_client = client(server)
         start_time = time.perf_counter()
         chat_completion = api_client.chat.completions.create(
-            model=server.model, messages=messages, modalities=["text"]
+            model=server.model, messages=messages, max_token=20, modalities=["text"]
         )
         # Verify E2E
         print(f"the request e2e is: {time.perf_counter() - start_time}")
@@ -75,6 +75,7 @@ def test_text_to_text_001(test_config: tuple[str, str]) -> None:
         # Verify text output success
         text_choice = chat_completion.choices[0]
         assert text_choice.message.content is not None, "No text output is generated"
+        assert chat_completion.usage.completion_tokens <= 20, "The output length more than the requested max_tokens."
         assert "beijing" in text_choice.message.content.lower(), "The output do not contain keywords."
 
 
