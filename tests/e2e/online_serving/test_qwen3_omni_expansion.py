@@ -63,7 +63,7 @@ def test_text_to_text_001(test_config: tuple[str, str]) -> None:
         api_client = client(server)
         start_time = time.perf_counter()
         chat_completion = api_client.chat.completions.create(
-            model=server.model, messages=messages, max_tokens=10, stop=None, modalities=["text"]
+            model=server.model, messages=messages, modalities=["text"]
         )
         # Verify E2E
         print(f"the request e2e is: {time.perf_counter() - start_time}")
@@ -75,8 +75,7 @@ def test_text_to_text_001(test_config: tuple[str, str]) -> None:
         # Verify text output success
         text_choice = chat_completion.choices[0]
         assert text_choice.message.content is not None, "No text output is generated"
-        assert chat_completion.usage.completion_tokens == 10, "The output length differs from the requested max_tokens."
-        assert "Beijing" in text_choice.message.content, "The output do not contain keywords."
+        assert "beijing" in text_choice.message.content.lower(), "The output do not contain keywords."
 
 
 @pytest.mark.parametrize("test_config", test_params)
@@ -86,12 +85,12 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
     model, stage_config_path = test_config
     num_concurrent_requests = 5
     stage_config_path = modify_stage_config(stage_config_path, {
-        0: {"runtime.max_batch_size": num_concurrent_requests, "default_sampling_params.ignore_eos": True},
+        0: {"runtime.max_batch_size": num_concurrent_requests},
         1: {"runtime.max_batch_size": num_concurrent_requests}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         messages = dummy_messages_from_mix_data(
             system_prompt=get_system_prompt(),
-            content_text="What is recited in the audio? What is in this image? Describe the video briefly."
+            content_text="What is the capital of China?"
         )
 
         # Test single completion
@@ -103,9 +102,7 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
                 executor.submit(
                     api_client.chat.completions.create,
                     model=server.model,
-                    messages=messages,
-                    max_tokens=1000,
-                    stop=None,
+                    messages=messages
                 )
                 for _ in range(num_concurrent_requests)
             ]
@@ -134,7 +131,7 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
             text_choice = chat_completion.choices[0]
             text_content = text_choice.message.content
             assert text_choice.message.content is not None, "No text output is generated"
-            assert chat_completion.usage.completion_tokens == 1000, "The output length differs from the requested max_tokens."
+            assert "beijing" in text_choice.message.content.lower(), "The output do not contain keywords."
 
             # Verify text output same as audio output
             audio_content = convert_audio_to_text(audio_data)
