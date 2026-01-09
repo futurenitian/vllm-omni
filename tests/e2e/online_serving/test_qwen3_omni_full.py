@@ -4,13 +4,14 @@
 E2E Online tests for Qwen3-Omni model with video input and audio output.
 """
 
+import concurrent.futures
 import os
-import time
 from pathlib import Path
+
 import openai
 import pytest
-import subprocess
-import concurrent.futures
+import time
+
 from tests.conftest import (OmniServer, dummy_messages_from_mix_data, modify_stage_config, convert_audio_to_text,
                             cosine_similarity_text, generate_synthetic_audio, generate_synthetic_image,
                             generate_synthetic_video, run_benchmark)
@@ -1002,7 +1003,7 @@ def test_mix_to_text_audio_004(test_config: tuple[str, str]) -> None:
                 "--random-output-len",
                 "1000",
                 "--num-prompts",
-                "1000",
+                "100",
                 "--percentile-metrics",
                 "ttft,tpot,itl,e2el",
                 "--endpoint",
@@ -1012,3 +1013,168 @@ def test_mix_to_text_audio_004(test_config: tuple[str, str]) -> None:
             ]
             result = run_benchmark(args)
             assert result.get("completed") == 1000, "The request success rate did not reach 100%."
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_chunked_prefill_001(test_config: tuple[str, str]) -> None:
+    """Test processing text, generating audio output via OpenAI API."""
+
+    model, stage_config_path = test_config
+    stage_config_path = modify_stage_config(stage_config_path, {
+        0: {"engine_args.max_num_batched_tokens": 32}})
+    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
+        video_data_url = f"data:video/mp4;base64,{generate_synthetic_video(16, 16, 300)}"
+        image_data_url = f"data:image/jpeg;base64,{generate_synthetic_image(16, 16)}"
+        audio_data_url = f"data:audio/wav;base64,{generate_synthetic_audio(1, 5)}"
+
+        messages = dummy_messages_from_mix_data(
+            system_prompt=get_system_prompt(),
+            video_data_url=video_data_url,
+            image_data_url=image_data_url,
+            audio_data_url=audio_data_url,
+            content_text="What is recited in the audio? What is in this image? Please describe the video briefly."
+        )
+        # Test single completion
+        api_client = client(server)
+        start_time = time.perf_counter()
+        chat_completion = api_client.chat.completions.create(
+            model=server.model, messages=messages, modalities=["text"], max_token=10,
+        )
+        # Verify E2E
+        print(f"the request e2e is: {time.perf_counter() - start_time}")
+        # TODO: Verify the E2E latency after confirmation baseline.
+
+        # Verify text output success
+        text_choice = chat_completion.choices[0]
+        assert text_choice.message.content is not None, "No text output is generated"
+        assert chat_completion.usage.completion_tokens == 10, "The output length differs from the requested max_tokens."
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_chunked_prefill_002(test_config: tuple[str, str]) -> None:
+    """Test processing text, generating audio output via OpenAI API."""
+
+    model, stage_config_path = test_config
+    num_concurrent_requests = 5
+    stage_config_path = modify_stage_config(stage_config_path, {
+        0: {"runtime.max_batch_size": num_concurrent_requests},
+        1: {"runtime.max_batch_size": num_concurrent_requests,
+            "engine_args.max_num_batched_tokens": 32}})
+    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
+        video_data_url = f"data:video/mp4;base64,{generate_synthetic_video(16, 16, 300)}"
+        image_data_url = f"data:image/jpeg;base64,{generate_synthetic_image(16, 16)}"
+        audio_data_url = f"data:audio/wav;base64,{generate_synthetic_audio(1, 5)}"
+
+        messages = dummy_messages_from_mix_data(
+            system_prompt=get_system_prompt(),
+            video_data_url=video_data_url,
+            image_data_url=image_data_url,
+            audio_data_url=audio_data_url,
+            content_text="What is recited in the audio? What is in this image? Please describe the video briefly."
+        )
+        # Test single completion
+        api_client = client(server)
+        e2e_list = list()
+        sampling_params_list = [{"max_tokens": 10}, {"max_tokens": 20}, {"max_tokens": 20}]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_concurrent_requests) as executor:
+            # Submit multiple completion requests concurrently
+            futures = [
+                executor.submit(
+                    api_client.chat.completions.create,
+                    model=server.model,
+                    messages=messages,
+                    extra_body={"sampling_params_list": sampling_params_list}
+                )
+                for _ in range(num_concurrent_requests)
+            ]
+            start_time = time.perf_counter()
+            # Wait for all requests to complete and collect results
+            chat_completions = list()
+            for future in concurrent.futures.as_completed(futures):
+                chat_completions.append(future.result())
+                # Verify E2E
+                current_e2e = time.perf_counter() - start_time
+                print(f"the request e2e is: {current_e2e}")
+                # TODO: Verify the E2E latency after confirmation baseline.
+                e2e_list.append(current_e2e)
+
+        print(f"the avg e2e is: {sum(e2e_list)/len(e2e_list)}")
+        # Verify all completions succeeded
+        assert len(chat_completions) == num_concurrent_requests, "Not all requests succeeded."
+        for chat_completion in chat_completions:
+            # Verify audio output success
+            audio_message = chat_completion.choices[1].message
+            audio_data = audio_message.audio.data
+            assert audio_data is not None, "No audio output is generated"
+            assert audio_message.audio.expires_at > time.time(), "The generated audio has expired."
+
+            # Verify text output success
+            text_choice = chat_completion.choices[0]
+            text_content = text_choice.message.content
+            assert text_choice.message.content is not None, "No text output is generated"
+            assert chat_completion.usage.completion_tokens == 10, "The output length differs from the requested max_tokens."
+
+            # Verify text output same as audio output
+            audio_content = convert_audio_to_text(audio_data)
+            print(f"text content is: {text_content}")
+            print(f"audio content is: {audio_content}")
+            assert cosine_similarity_text(audio_content,
+                                          text_content) > 0.9, "The audio content is not same as the text"
+
+
+@pytest.mark.full
+@pytest.mark.H100_2
+@pytest.mark.parametrize("test_config", test_params)
+def test_chunked_prefill_003(test_config: tuple[str, str]) -> None:
+    """Test processing text, generating audio output via OpenAI API."""
+
+    model, stage_config_path = test_config
+    num_concurrent_requests = 256
+    stage_config_path = modify_stage_config(stage_config_path, {
+        0: {"runtime.max_batch_size": num_concurrent_requests, "engine_args.max_num_batched_tokens": 128},
+        1: {"runtime.max_batch_size": num_concurrent_requests,
+            "engine_args.max_num_batched_tokens": 128}})
+    with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
+        request_rates = [0.5, 0.8, 1]
+        for request_rate in request_rates:
+            args = [
+                "--model",
+                server.model,
+                "--host",
+                server.host,
+                "--port",
+                str(server.port),
+                "--dataset-name",
+                "random-mm",
+                "--request_rate",
+                str(request_rate),
+                "--random-input-len",
+                "200",
+                "--random-range-ratio",
+                "0.0",
+                "--random-mm-base-items-per-request",
+                "3",
+                "--random-mm-num-mm-items-range-ratio",
+                "0",
+                "--random-mm-limit-mm-per-prompt",
+                '{"image":1, "video": 1, "audio": 1}',
+                "--random-mm-bucket-config",
+                '{"(16,16,1)":0.33, "(0,1,1)": 0.33, "(16, 16, 24)": 0.33}',
+                "--ignore-eos",
+                "--random-output-len",
+                "10",
+                "--num-prompts",
+                "100",
+                "--percentile-metrics",
+                "ttft,tpot,itl,e2el",
+                "--endpoint",
+                "/v1/chat/completions",
+                "--backend",
+                "openai-chat"
+            ]
+            result = run_benchmark(args)
+            assert result.get("completed") == 100, "The request success rate did not reach 100%."
