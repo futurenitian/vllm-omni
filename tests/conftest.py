@@ -2,13 +2,13 @@ import base64
 import os
 import socket
 import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
 import psutil
 import pytest
-import sys
-import time
 import torch
 import whisper
 import yaml
@@ -48,11 +48,11 @@ def clean_gpu_memory_between_tests():
 
 
 def dummy_messages_from_mix_data(
-        system_prompt: dict[str, Any] = None,
-        video_data_url: Any = None,
-        audio_data_url: Any = None,
-        image_data_url: Any = None,
-        content_text: str = None,
+    system_prompt: dict[str, Any] = None,
+    video_data_url: Any = None,
+    audio_data_url: Any = None,
+    image_data_url: Any = None,
+    content_text: str = None,
 ):
     """Create messages with video、image、audio data URL for OpenAI API."""
 
@@ -102,6 +102,7 @@ def cosine_similarity_text(s1, s2):
     """
     from sklearn.feature_extraction.text import CountVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
+
     vectorizer = CountVectorizer().fit_transform([s1, s2])
     vectors = vectorizer.toarray()
     return cosine_similarity([vectors[0]], [vectors[1]])[0][0]
@@ -114,7 +115,7 @@ def convert_audio_to_text(audio_data):
 
     audio_data = base64.b64decode(audio_data)
     output_path = f"./test_{int(time.time())}"
-    with open(output_path, 'wb') as audio_file:
+    with open(output_path, "wb") as audio_file:
         audio_file.write(audio_data)
 
     print(f"audio data is saved: {output_path}")
@@ -127,8 +128,8 @@ def convert_audio_to_text(audio_data):
 
 
 def modify_stage_config(
-        yaml_path: str,
-        stage_updates: dict[int, dict[str, Any]],
+    yaml_path: str,
+    stage_updates: dict[int, dict[str, Any]],
 ) -> str:
     """
     Batch modify configurations for multiple stages in a YAML file.
@@ -205,11 +206,11 @@ class OmniServer:
     """Omniserver for vLLM-Omni tests."""
 
     def __init__(
-            self,
-            model: str,
-            serve_args: list[str],
-            *,
-            env_dict: dict[str, str] | None = None,
+        self,
+        model: str,
+        serve_args: list[str],
+        *,
+        env_dict: dict[str, str] | None = None,
     ) -> None:
         self.model = model
         self.serve_args = serve_args
@@ -226,17 +227,17 @@ class OmniServer:
             env.update(self.env_dict)
 
         cmd = [
-                  sys.executable,
-                  "-m",
-                  "vllm_omni.entrypoints.cli.main",
-                  "serve",
-                  self.model,
-                  "--omni",
-                  "--host",
-                  self.host,
-                  "--port",
-                  str(self.port),
-              ] + self.serve_args
+            sys.executable,
+            "-m",
+            "vllm_omni.entrypoints.cli.main",
+            "serve",
+            self.model,
+            "--omni",
+            "--host",
+            self.host,
+            "--port",
+            str(self.port),
+        ] + self.serve_args
 
         print(f"Launching OmniServer with: {' '.join(cmd)}")
         self.proc = subprocess.Popen(

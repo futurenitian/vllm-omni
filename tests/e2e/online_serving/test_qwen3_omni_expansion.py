@@ -6,14 +6,19 @@ E2E Online tests for Qwen3-Omni model.
 
 import concurrent.futures
 import os
+import time
 from pathlib import Path
 
 import openai
 import pytest
-import time
 
-from tests.conftest import (OmniServer, dummy_messages_from_mix_data, modify_stage_config, convert_audio_to_text,
-                            cosine_similarity_text)
+from tests.conftest import (
+    OmniServer,
+    convert_audio_to_text,
+    cosine_similarity_text,
+    dummy_messages_from_mix_data,
+    modify_stage_config,
+)
 
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
@@ -49,14 +54,14 @@ def get_system_prompt():
         ],
     }
 
+
 @pytest.mark.parametrize("test_config", test_params)
 def test_text_to_text_001(test_config: tuple[str, str]) -> None:
     """Test processing text, generating text output via OpenAI API."""
     model, stage_config_path = test_config
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         messages = dummy_messages_from_mix_data(
-            system_prompt=get_system_prompt(),
-            content_text="What is the capital of China?"
+            system_prompt=get_system_prompt(), content_text="What is the capital of China?"
         )
 
         # Test single completion
@@ -81,17 +86,20 @@ def test_text_to_text_001(test_config: tuple[str, str]) -> None:
 
 @pytest.mark.parametrize("test_config", test_params)
 def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
-    """Test processing text, generating audio output via OpenAI API."""
+    """Test processing text, generating text and audio output via OpenAI API."""
 
     model, stage_config_path = test_config
     num_concurrent_requests = 5
-    stage_config_path = modify_stage_config(stage_config_path, {
-        0: {"runtime.max_batch_size": num_concurrent_requests},
-        1: {"runtime.max_batch_size": num_concurrent_requests}})
+    stage_config_path = modify_stage_config(
+        stage_config_path,
+        {
+            0: {"runtime.max_batch_size": num_concurrent_requests},
+            1: {"runtime.max_batch_size": num_concurrent_requests},
+        },
+    )
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         messages = dummy_messages_from_mix_data(
-            system_prompt=get_system_prompt(),
-            content_text="What is the capital of China?"
+            system_prompt=get_system_prompt(), content_text="What is the capital of China?"
         )
 
         # Test single completion
@@ -100,11 +108,7 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_concurrent_requests) as executor:
             # Submit multiple completion requests concurrently
             futures = [
-                executor.submit(
-                    api_client.chat.completions.create,
-                    model=server.model,
-                    messages=messages
-                )
+                executor.submit(api_client.chat.completions.create, model=server.model, messages=messages)
                 for _ in range(num_concurrent_requests)
             ]
             start_time = time.perf_counter()
@@ -118,7 +122,7 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
                 # TODO: Verify the E2E latency after confirmation baseline.
                 e2e_list.append(current_e2e)
 
-        print(f"the avg e2e is: {sum(e2e_list)/len(e2e_list)}")
+        print(f"the avg e2e is: {sum(e2e_list) / len(e2e_list)}")
         # Verify all completions succeeded
         assert len(chat_completions) == num_concurrent_requests, "Not all requests succeeded."
         for chat_completion in chat_completions:
@@ -138,5 +142,6 @@ def test_text_to_text_audio_001(test_config: tuple[str, str]) -> None:
             audio_content = convert_audio_to_text(audio_data)
             print(f"text content is: {text_content}")
             print(f"audio content is: {audio_content}")
-            assert cosine_similarity_text(audio_content,
-                                          text_content) > 0.8, "The audio content is not same as the text"
+            assert cosine_similarity_text(audio_content.lower(), text_content.lower()) > 0.9, (
+                "The audio content is not same as the text"
+            )
