@@ -1084,10 +1084,11 @@ def test_chunked_prefill_002(test_config: tuple[str, str]) -> None:
             # Submit multiple completion requests concurrently
             futures = [
                 executor.submit(
-                    api_client.chat.completions.create,
-                    model=server.model,
-                    messages=messages,
-                    extra_body={"sampling_params_list": sampling_params_list}
+                    lambda: api_client.chat.completions.create(
+                        model=server.model,
+                        messages=messages,
+                        extra_body={"sampling_params_list": sampling_params_list}
+                    )
                 )
                 for _ in range(num_concurrent_requests)
             ]
