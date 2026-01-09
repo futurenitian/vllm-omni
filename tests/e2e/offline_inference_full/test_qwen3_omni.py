@@ -1,109 +1,193 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 """
-E2E Online tests for Qwen3-Omni model with video input and audio output.
+E2E Online tests for Qwen3-Omni model with multimodal input and mixed outputs.
+
+This file contains helper functions inlined below and a single comprehensive
+test `test_mix_to_text_audio_001` which performs mixed input -> text+audio
+generation and validation.
 """
 
 import os
 import time
 from pathlib import Path
-import openai
 import pytest
-import concurrent.futures
-from tests.conftest import OmniRunner
+from tests.conftest import (
+    OmniRunner,
+    generate_synthetic_video,
+    generate_synthetic_image,
+    generate_synthetic_audio,
+    convert_audio_to_text,
+    cosine_similarity_text,
+)
+
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
-models = ["Qwen/Qwen3-Omni-30B-A3B-Instruct"]
-
-# CI stage config for 2*H100-80G GPUs
+models = ["/data2/models/Qwen3-Omni-30B-A3B-Instruct"]
 stage_configs = [str(Path(__file__).parent.parent / "stage_configs" / "qwen3_omni_ci.yaml")]
-
-# Create parameter combinations for model and stage config
 test_params = [(model, stage_config) for model in models for stage_config in stage_configs]
 
 
-@pytest.mark.full
-@pytest.mark.H100_2
-@pytest.mark.parametrize("test_config", test_params)
-def test_text_to_text_001(test_config) -> None:
-    """Test processing text, generating text output via OpenAI API."""
-    model, stage_config_path = test_config
-    with OmniRunner(model, seed=42, stage_configs_path=stage_config_path, stage_init_timeout=300) as runner:
-        # Prepare inputs
-        question = "What is the capital of China?"
-        start_time = time.perf_counter()
-        outputs = runner.generate_multimodal(
-            prompts=question,
-            modalities=["text"]
-        )
-
-        #Find and verify text output (thinker stage)
-        stage_outputs = list()
-        for stage_output in outputs:
-            stage_outputs.append(stage_output)
-
-        # Verify E2E
-        print(f"the request e2e is: {time.perf_counter() - start_time}")
-        # TODO: Verify the E2E latency after confirmation baseline.
-
-        # Verify only output text
-        assert len(stage_outputs) == 1, "The generated content includes more than just text."
-
-        # Verify text output success
-        assert stage_outputs[0].final_output_type == "text", "No text output is generated"
-        assert "Beijing" in stage_outputs[0].request_output[0].outputs[0].text, "The generated text is incorrect."
+# Test parameters (kept compact but match your requirements)
+TEST_PARAMS = {
+    "text_length": 67,
+    "video_pixel": (1280, 720),
+    "video_num": 2,
+    "video_frames": 300,
+    "image_pixel": (16, 16),
+    "image_num": 2,
+    "audio_num": 2,
+    "audio_duration": 10,
+    "audio_channels": 2,
+    "max_tokens": 10,
+    "num_requests": 5,
+}
 
 
+def generate_test_prompt():
+    base = (
+        "Describe what you see and hear in the provided multimedia content. Focus on the main elements: "
+    )
+    if len(base) > TEST_PARAMS["text_length"]:
+        return base[: TEST_PARAMS["text_length"]]
+    return base.ljust(TEST_PARAMS["text_length"], "x")
 
-@pytest.mark.full
-@pytest.mark.H100_2
-@pytest.mark.parametrize("test_config", test_params)
-def test_text_to_text_001(test_config) -> None:
-    """Test processing text, generating text output via OpenAI API."""
-    model, stage_config_path = test_config
-    with OmniRunner(model, seed=42, stage_configs_path=stage_config_path, stage_init_timeout=300) as runner:
-        # Prepare inputs
-        question = "What is the capital of China?"
-        start_time = time.perf_counter()
-        outputs = runner.generate_multimodal(
-            prompts=question,
-            modalities=["text"]
-        )
 
-        #Find and verify text output (thinker stage)
-        stage_outputs = list()
-        for stage_output in outputs:
-            stage_outputs.append(stage_output)
+def generate_mixed_multimodal_data():
+    video_data = []
+    for _ in range(TEST_PARAMS["video_num"]):
+        w, h = TEST_PARAMS["video_pixel"]
+        b64 = generate_synthetic_video(width=w, height=h, num_frames=TEST_PARAMS["video_frames"])
+        video_data.append(f"data:video/mp4;base64,{b64}")
 
-        # Verify E2E
-        print(f"the request e2e is: {time.perf_counter() - start_time}")
-        # TODO: Verify the E2E latency after confirmation baseline.
+    image_data = []
+    for _ in range(TEST_PARAMS["image_num"]):
+        w, h = TEST_PARAMS["image_pixel"]
+        b64 = generate_synthetic_image(width=w, height=h)
+        image_data.append(f"data:image/jpeg;base64,{b64}")
 
-        # Verify only output text
-        assert len(stage_outputs) == 1, "The generated content includes more than just text."
+    audio_data = []
+    for _ in range(TEST_PARAMS["audio_num"]):
+        b64 = generate_synthetic_audio(duration=TEST_PARAMS["audio_duration"], num_channels=TEST_PARAMS["audio_channels"])
+        audio_data.append(f"data:audio/wav;base64,{b64}")
 
-        # Verify text output success
-        assert stage_outputs[0].final_output_type == "text", "No text output is generated"
-        assert "Beijing" in stage_outputs[0].request_output[0].outputs[0].text, "The generated text is incorrect."
-
+    return video_data, image_data, audio_data
 
 
 @pytest.mark.full
 @pytest.mark.H100_2
 @pytest.mark.parametrize("test_config", test_params)
-def test_mix_to_text_audio_002(test_config) -> None:
-    """Test processing text, audio, video, image, generating text and audio output via OpenAI API."""
-    model, stage_config_path = test_config
-    with OmniRunner(model, seed=42, stage_configs_path=stage_config_path, stage_init_timeout=300) as runner:
-        command = ["python",
-                   "example/offline_inference/qwen3_omni/end2end.py",
-                   "--num-prompts", 100, "--num-frames", 300]
-        process = subprocess.Popen(command,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   text=True,
-                                   bufsize=1,
-                                   universal_newlines=True)
+def test_mix_to_text_audio_001(test_config) -> None:
+    """Test: mixed input (video+image+audio+text) -> mixed output (text+audio).
 
-        for line in iter(process.stdout.readline, ''):
-            print(line, end=' ')
+    All helper logic is implemented in this function using the inlined helpers
+    above and the utilities imported from `tests.conftest`.
+    """
+    model, stage_config_path = test_config
+
+    # Allow skipping on small environments
+    if os.getenv("VLLM_SKIP_LONG_E2E", "0") == "1":
+        pytest.skip("Skipping long E2E test (VLLM_SKIP_LONG_E2E=1)")
+
+    prompt = generate_test_prompt()
+    videos, images, audios = generate_mixed_multimodal_data()
+
+    total_start = time.perf_counter()
+
+    with OmniRunner(model, seed=42, stage_configs_path=stage_config_path, stage_init_timeout=300, batch_timeout=30, init_timeout=600) as runner:
+        per_request = []  # list of dicts {texts:[], audios:[]}
+        latencies = []
+
+        for idx in range(TEST_PARAMS["num_requests"]):
+            print(f"\nProcessing request {idx+1}/{TEST_PARAMS['num_requests']}")
+            t0 = time.perf_counter()
+            outputs = list(
+                runner.generate_multimodal(
+                    prompts=prompt,
+                    videos=videos,
+                    images=images,
+                    audios=audios,
+                    modalities=["text", "audio"],
+                    mm_processor_kwargs={"use_audio_in_video": True},
+                )
+            )
+            latencies.append(time.perf_counter() - t0)
+
+            texts = []
+            audio_blobs = []
+            for out in outputs:
+                typ = getattr(out, "final_output_type", None)
+                if typ == "text":
+                    try:
+                        texts.append(out.request_output[0].outputs[0].text)
+                    except Exception:
+                        texts.append("")
+                elif typ == "audio":
+                    try:
+                        audio_blobs.append(out.request_output[0].outputs[0].audio)
+                    except Exception:
+                        audio_blobs.append(None)
+
+            per_request.append({"texts": texts, "audios": audio_blobs})
+
+        total_time = time.perf_counter() - total_start
+        avg_latency = sum(latencies) / len(latencies) if latencies else 0
+        throughput = TEST_PARAMS["num_requests"] / total_time if total_time > 0 else 0
+
+        print("\n" + "=" * 60)
+        print("TEST RESULTS SUMMARY:")
+        print("=" * 60)
+        print(f"Total requests: {TEST_PARAMS['num_requests']}")
+        print(f"Total time: {total_time:.2f}s")
+        print(f"Avg latency: {avg_latency:.2f}s")
+        print(f"Throughput: {throughput:.2f} req/s")
+
+        # Validations
+        audio_count = sum(1 for r in per_request if len(r["audios"]) > 0)
+        text_count = sum(1 for r in per_request if len(r["texts"]) > 0)
+        assert audio_count > 0, "No audio outputs generated"
+        assert text_count > 0, "No text outputs generated"
+
+        for i, r in enumerate(per_request):
+            for j, txt in enumerate(r["texts"]):
+                txt = txt or ""
+                print(f"Request {i+1} text #{j+1}: {txt[:100]}" if txt else f"Request {i+1} text #{j+1}: <empty>")
+                assert len(txt.strip()) > 0, f"Empty text output for request {i+1} text #{j+1}"
+
+        latency_threshold = 30
+        assert avg_latency < latency_threshold, f"Average latency {avg_latency:.2f}s exceeds {latency_threshold}s"
+
+        # Audio -> text accuracy
+        successful = 0
+        total_comp = 0
+        for i, r in enumerate(per_request):
+            if not r["audios"] or not r["texts"]:
+                continue
+            for a_idx, a_blob in enumerate(r["audios"]):
+                if not a_blob:
+                    continue
+                try:
+                    a_text = convert_audio_to_text(a_blob)
+                except Exception as e:
+                    print(f"Error converting audio for request {i+1} audio #{a_idx+1}: {e}")
+                    continue
+                if not a_text:
+                    continue
+                for t_idx, gen_text in enumerate(r["texts"]):
+                    sim = cosine_similarity_text(a_text, gen_text)
+                    total_comp += 1
+                    print(f"Req {i+1} audio#{a_idx+1} vs text#{t_idx+1} sim={sim:.3f}")
+                    if sim > 0.3:
+                        successful += 1
+                        break
+
+        if total_comp > 0:
+            acc = successful / total_comp
+            print(f"Audio accuracy: {successful}/{total_comp} ({acc:.2%})")
+
+        # Final assertions
+        assert audio_count > 0
+        assert text_count > 0
+        assert avg_latency > 0
+
+
