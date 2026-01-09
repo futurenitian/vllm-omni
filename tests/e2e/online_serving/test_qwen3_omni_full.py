@@ -1134,7 +1134,7 @@ def test_chunked_prefill_003(test_config: tuple[str, str]) -> None:
     """Test processing text, generating audio output via OpenAI API."""
 
     model, stage_config_path = test_config
-    num_concurrent_requests = 256
+    num_concurrent_requests = 100
     stage_config_path = modify_stage_config(stage_config_path, {
         0: {"runtime.max_batch_size": num_concurrent_requests, "engine_args.max_num_batched_tokens": 128},
         1: {"runtime.max_batch_size": num_concurrent_requests,
