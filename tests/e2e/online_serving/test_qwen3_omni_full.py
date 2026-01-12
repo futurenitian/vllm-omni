@@ -150,7 +150,7 @@ def test_text_to_audio_001(test_config: tuple[str, str]) -> None:
     model, stage_config_path = test_config
     stage_config_path = modify_stage_config(stage_config_path, {
         0: {"engine_args.gpu_memory_utilization": 0.95, "engine_args.tensor_parallel_size": 1, "runtime.devices": "0"},
-        1: {"runtime.devices": "1"}})
+        2: {"runtime.devices": "1"}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         messages = dummy_messages_from_mix_data(
             system_prompt=get_system_prompt(),
@@ -184,7 +184,7 @@ def test_audio_to_text_001(test_config: tuple[str, str]) -> None:
     model, stage_config_path = test_config
     stage_config_path = modify_stage_config(stage_config_path, {
         0: {"engine_args.gpu_memory_utilization": 0.95, "engine_args.tensor_parallel_size": 1, "runtime.devices": "2", "default_sampling_params.ignore_eos": True},
-        1: {"runtime.devices": "1"}})
+        2: {"runtime.devices": "1"}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         audio_data_url = f"data:audio/wav;base64,{generate_synthetic_audio(1, 1)}"
         messages = dummy_messages_from_mix_data(
@@ -287,7 +287,7 @@ def test_image_to_text_001(test_config: tuple[str, str]) -> None:
     model, stage_config_path = test_config
     stage_config_path = modify_stage_config(stage_config_path, {
         0: {"engine_args.gpu_memory_utilization": 0.95, "engine_args.tensor_parallel_size": 1, "runtime.devices": "2", "default_sampling_params.ignore_eos": True},
-        1: {"runtime.devices": "1"}})
+        2: {"runtime.devices": "1"}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         image_data_url = f"data:image/jpeg;base64,{generate_synthetic_image(16, 16)}"
         messages = dummy_messages_from_mix_data(
@@ -495,7 +495,7 @@ def test_text_image_to_text_001(test_config: tuple[str, str]) -> None:
     model, stage_config_path = test_config
     stage_config_path = modify_stage_config(stage_config_path, {
         0: {"engine_args.gpu_memory_utilization": 0.95, "engine_args.tensor_parallel_size": 1, "runtime.devices": "0", "default_sampling_params.ignore_eos": True},
-        1: {"runtime.devices": "1"}})
+        2: {"runtime.devices": "1"}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         image_data_url = f"data:image/jpeg;base64,{generate_synthetic_image(16, 16)}"
         messages = dummy_messages_from_mix_data(
@@ -602,7 +602,7 @@ def test_text_video_to_text_001(test_config: tuple[str, str]) -> None:
     model, stage_config_path = test_config
     stage_config_path = modify_stage_config(stage_config_path, {
         0: {"engine_args.gpu_memory_utilization": 0.95, "engine_args.tensor_parallel_size": 1, "runtime.devices": "0"},
-        1: {"runtime.devices": "1"}})
+        2: {"runtime.devices": "1"}})
     with OmniServer(model, ["--stage-configs-path", stage_config_path, "--stage-init-timeout", "90"]) as server:
         video_data_url = f"data:video/mp4;base64,{generate_synthetic_video(16, 16, 24)}"
         messages = dummy_messages_from_mix_data(
