@@ -2,7 +2,8 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 import argparse
 
-from vllm_omni.benchmarks.serve import add_cli_args, main
+from vllm.benchmarks.serve import add_cli_args
+from vllm_omni.benchmarks.serve import main
 from vllm_omni.entrypoints.cli.benchmark.base import OmniBenchmarkSubcommandBase
 
 

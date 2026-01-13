@@ -1,4 +1,4 @@
-from vllm_omni.benchmarks.datasets import OmniRandomMultiModalDataset
+from vllm_omni.benchmarks.datasets.random_multi_modal_dataset import OmniRandomMultiModalDataset
 
 import os
 import sys
@@ -10,8 +10,7 @@ from typing import Literal
 import aiohttp
 import numpy as np
 from tqdm.asyncio import tqdm
-from vllm.benchmarks.lib.endpoint_request_func import (async_request_openai_completions,async_request_openai_audio,
-                                                       async_request_openai_embeddings, RequestFunc,_update_payload_common,
+from vllm.benchmarks.lib.endpoint_request_func import (_update_payload_common,
                                                        RequestFuncInput,_validate_api_url,_get_chat_content,
                                                        StreamedResponseHandler,_update_headers_common)
 
