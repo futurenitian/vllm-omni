@@ -19,7 +19,6 @@ from vllm.benchmarks.lib.endpoint_request_func import (_update_payload_common,
                                                        StreamedResponseHandler,_update_headers_common)
 
 
-vllm.benchmarks.lib.endpoint_request_func.async_request_openai_chat_completions = async_request_openai_chat_completions
 from vllm.benchmarks.datasets import get_samples as get_samples_old
 def get_samples(args, tokenizer):
     from vllm_omni.benchmarks.datasets.random_multi_modal_dataset import OmniRandomMultiModalDataset
@@ -159,14 +158,16 @@ async def async_request_openai_chat_completions(
     if pbar:
         pbar.update(1)
     return output
+vllm.benchmarks.lib.endpoint_request_func.async_request_openai_chat_completions = async_request_openai_chat_completions
 
 
 from vllm.benchmarks.serve import BenchmarkMetrics as BenchmarkMetrics_old
 @dataclass
 class BenchmarkMetrics(BenchmarkMetrics_old):
-    mean_audio_ttft_ms: float
-    median_audio_ttft_ms: float
-    std_audio_ttft_ms: float
+    mean_audio_ttft_ms: float = 0.0
+    median_audio_ttft_ms: float = 0.0
+    std_audio_ttft_ms: float = 0.0
+    percentiles_audio_ttft_ms: list[tuple[float, float]] = []
 vllm.benchmarks.serve.BenchmarkMetrics = BenchmarkMetrics
 
 
@@ -180,7 +181,7 @@ def calculate_metrics(
     goodput_config_dict: dict[str, float],
 ):
     audio_ttfts = []
-    result = calculate_metrics_old(input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict)
+    result, actual_output_lens = calculate_metrics_old(input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict)
     for i in range(len(outputs)):
         if outputs[i] is not None and outputs[i].success:
             audio_ttfts.append(outputs[i].audio_ttft)
@@ -199,12 +200,12 @@ def calculate_metrics(
     result.mean_audio_ttft_ms = mean_ttft_ms
     result.median_audio_ttft_ms = median_ttft_ms
     result.std_audio_ttft_ms = std_ttft_ms
+    result.percentiles_audio_ttft_ms = percentiles_ttft_ms
     for p, value in percentiles_ttft_ms:
         p_word = str(int(p)) if int(p) == p else str(p)
         print("{:<40} {:<10.2f}".format(f"P{p_word} Audio TTFT (ms):",
                                         value))
-        result[f"p{p_word}_audio_ttft_ms"] = value
     print("=" * 50)
-    return result
+    return result, actual_output_lens
 vllm.benchmarks.serve.calculate_metrics = calculate_metrics
 
