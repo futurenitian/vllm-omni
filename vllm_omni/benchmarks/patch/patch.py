@@ -167,7 +167,7 @@ class BenchmarkMetrics(BenchmarkMetrics_old):
     mean_audio_ttft_ms: float = 0.0
     median_audio_ttft_ms: float = 0.0
     std_audio_ttft_ms: float = 0.0
-    percentiles_audio_ttft_ms: list[tuple[float, float]] = []
+    percentiles_audio_ttft_ms: list[tuple[float, float]] = None
 vllm.benchmarks.serve.BenchmarkMetrics = BenchmarkMetrics
 
 
@@ -209,3 +209,23 @@ def calculate_metrics(
     return result, actual_output_lens
 vllm.benchmarks.serve.calculate_metrics = calculate_metrics
 
+# patch.py 文件末尾添加
+import importlib
+
+
+def reload_patched_modules():
+    modules = [
+        'vllm.benchmarks.datasets',
+        'vllm.benchmarks.lib.endpoint_request_func',
+        'vllm.benchmarks.serve'
+    ]
+
+    for module_name in modules:
+        try:
+            if module_name in sys.modules:
+                importlib.reload(sys.modules[module_name])
+                print(f"PATCH: Reloaded {module_name}")
+        except Exception as e:
+            print(f"PATCH: Failed to reload {module_name}: {e}")
+
+reload_patched_modules()
