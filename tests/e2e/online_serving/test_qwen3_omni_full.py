@@ -1184,14 +1184,14 @@ def test_chunked_prefill_003(test_config: tuple[str, str]) -> None:
 def test_transformers_comparison_001(test_config: tuple[str, str]) -> None:
     """Test processing text, generating audio output via OpenAI API."""
 
-    model, stage_config_path = test_config
+    model_path, stage_config_path = test_config
     model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
-        model,
+        model_path,
         dtype="auto",
         device_map="auto",
         attn_implementation="flash_attention_2",
     )
-    processor = Qwen3OmniMoeProcessor.from_pretrained(model)
+    processor = Qwen3OmniMoeProcessor.from_pretrained(model_path)
 
     video_data_url = f"data:video/mp4;base64,{generate_synthetic_video(16, 16, 300)}"
     image_data_url = f"data:image/jpeg;base64,{generate_synthetic_image(16, 16)}"
