@@ -1,5 +1,4 @@
 from vllm_omni.benchmarks.datasets import OmniRandomMultiModalDataset
-from vllm.benchmarks.datasets import get_samples
 
 import os
 import sys
@@ -9,6 +8,7 @@ import traceback
 from dataclasses import dataclass
 from typing import Literal
 import aiohttp
+import numpy as np
 from tqdm.asyncio import tqdm
 from vllm.benchmarks.lib.endpoint_request_func import (async_request_openai_completions,async_request_openai_audio,
                                                        async_request_openai_embeddings, RequestFunc,_update_payload_common,
@@ -18,27 +18,20 @@ from vllm.benchmarks.lib.endpoint_request_func import (async_request_openai_comp
 
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 
+from vllm.benchmarks.lib.endpoint_request_func import RequestFuncOutput as RequestFuncOutput_old
+
 @dataclass
-class RequestFuncOutput:
-    generated_text: str = ""
-    success: bool = False
-    latency: float = 0.0
-    output_tokens: int = 0
-    ttft: float = 0.0  # Time to first token
-    itl: list[float] = field(default_factory=list)  # list of inter-token latencies
-    tpot: float = 0.0  # avg next-token latencies
-    prompt_len: int = 0
-    error: str = ""
-    start_time: float = 0.0
+class RequestFuncOutput(RequestFuncOutput_old):
     audio_ttft: float = 0.0
 
+vllm.benchmarks.lib.endpoint_request_func.RequestFuncOutput = RequestFuncOutput
 
 async def async_request_openai_chat_completions(
     request_func_input: RequestFuncInput,
     session: aiohttp.ClientSession,
     pbar: tqdm | None = None,
     mm_position: Literal["first", "last"] = "last",
-) -> MixRequestFuncOutput:
+) -> RequestFuncOutput:
     api_url = request_func_input.api_url
     _validate_api_url(api_url, "OpenAI Chat Completions API", "chat/completions")
 
@@ -66,7 +59,7 @@ async def async_request_openai_chat_completions(
     }
     _update_headers_common(headers, request_func_input)
 
-    output = MixRequestFuncOutput()
+    output = RequestFuncOutput()
     output.prompt_len = request_func_input.prompt_len
 
     generated_text = ""
@@ -133,21 +126,8 @@ async def async_request_openai_chat_completions(
         pbar.update(1)
     return output
 
-# TODO: Add more request functions for different API protocols.
-ASYNC_REQUEST_FUNCS: dict[str, RequestFunc] = {
-    "vllm": async_request_openai_completions,
-    "openai": async_request_openai_completions,
-    "openai-chat": async_request_openai_chat_completions,
-    "openai-audio": async_request_openai_audio,
-    "openai-embeddings": async_request_openai_embeddings,
-}
-
-OPENAI_COMPATIBLE_BACKENDS = [
-    k for k, v in ASYNC_REQUEST_FUNCS.items()
-    if v in (async_request_openai_completions,
-             async_request_openai_chat_completions)]
-
-
+vllm.benchmarks.lib.endpoint_request_func.async_request_openai_chat_completions = async_request_openai_chat_completions
+from vllm.benchmarks.datasets import get_sample as get_samples_old
 def get_samples(args, tokenizer):
     if args.dataset_name == "random-mm":
         if args.backend not in [
@@ -175,4 +155,44 @@ def get_samples(args, tokenizer):
         )
         return input_requests
     else:
-        return get_samples(args, tokenizer)
+        return get_samples_old(args, tokenizer)
+vllm.benchmarks.datasets.get_samples = get_samples
+
+from vllm.benchmarks.serve import calculate_metrics as calculate_metrics_old
+def calculate_metrics(
+    input_requests: list[SampleRequest],
+    outputs: list[RequestFuncOutput],
+    dur_s: float,
+    tokenizer: PreTrainedTokenizerBase,
+    selected_percentiles: list[float],
+    goodput_config_dict: dict[str, float],
+):
+    audio_ttfts = []
+    result = calculate_metrics_old(input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict)
+    for i in range(len(outputs)):
+        if outputs[i] is not None and outputs[i].success:
+            audio_ttfts.append(outputs[i].audio_ttft)
+    mean_ttft_ms = np.mean(audio_ttfts or 0) * 1000
+    std_ttft_ms = np.std(audio_ttfts or 0) * 1000
+    median_ttft_ms = np.median(audio_ttfts or 0) * 1000
+    percentiles_ttft_ms = [(p, np.percentile(audio_ttfts or 0, p) * 1000)
+                           for p in selected_percentiles]
+
+    print("{s:{c}^{n}}".format(s=' Supplemental result ', n=50, c='='))
+    print("{s:{c}^{n}}".format(s="Time to audio First Token", n=50, c='-'))
+    print("{:<40} {:<10.2f}".format(
+        f"Mean Audio TTFT  (ms):",mean_ttft_ms))
+    print("{:<40} {:<10.2f}".format(
+        f"Median Audio TTFT (ms):",median_ttft_ms))
+    result[f"mean_audio_ttft_ms"] = mean_ttft_ms
+    result[f"median_audio_ttft_ms"] = median_ttft_ms
+    result[f"std_audio_ttft_ms"] = std_ttft_ms
+    for p, value in percentiles_ttft_ms:
+        p_word = str(int(p)) if int(p) == p else str(p)
+        print("{:<40} {:<10.2f}".format(f"P{p_word} Audio TTFT (ms):",
+                                        value))
+        result[f"p{p_word}_audio_ttft_ms"] = value
+    print("=" * 50)
+    return result
+vllm.benchmarks.serve.calculate_metrics = calculate_metrics
+
