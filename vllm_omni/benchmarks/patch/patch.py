@@ -1,4 +1,5 @@
-"""The request function for API endpoints."""
+from vllm_omni.benchmarks.datasets import OmniRandomMultiModalDataset
+from vllm.benchmarks.datasets import get_samples
 
 import os
 import sys
@@ -6,18 +7,29 @@ import time
 import json
 import traceback
 from dataclasses import dataclass
-from typing import Optional,Literal
+from typing import Literal
 import aiohttp
 from tqdm.asyncio import tqdm
 from vllm.benchmarks.lib.endpoint_request_func import (async_request_openai_completions,async_request_openai_audio,
                                                        async_request_openai_embeddings, RequestFunc,_update_payload_common,
                                                        RequestFuncInput,_validate_api_url,_get_chat_content,
-                                                       RequestFuncOutput,StreamedResponseHandler,_update_headers_common)
+                                                       StreamedResponseHandler,_update_headers_common)
+
 
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 
 @dataclass
-class MixRequestFuncOutput(RequestFuncOutput):
+class RequestFuncOutput:
+    generated_text: str = ""
+    success: bool = False
+    latency: float = 0.0
+    output_tokens: int = 0
+    ttft: float = 0.0  # Time to first token
+    itl: list[float] = field(default_factory=list)  # list of inter-token latencies
+    tpot: float = 0.0  # avg next-token latencies
+    prompt_len: int = 0
+    error: str = ""
+    start_time: float = 0.0
     audio_ttft: float = 0.0
 
 
@@ -133,5 +145,34 @@ ASYNC_REQUEST_FUNCS: dict[str, RequestFunc] = {
 OPENAI_COMPATIBLE_BACKENDS = [
     k for k, v in ASYNC_REQUEST_FUNCS.items()
     if v in (async_request_openai_completions,
-             async_request_openai_chat_completions)
-]
+             async_request_openai_chat_completions)]
+
+
+def get_samples(args, tokenizer):
+    if args.dataset_name == "random-mm":
+        if args.backend not in [
+            "openai-chat"]:
+            raise ValueError(
+                "Multi-modal content (images) is only supported on "
+                "'openai-chat' backend."
+            )
+        dataset = OmniRandomMultiModalDataset(
+            random_seed=args.seed, dataset_path=args.dataset_path
+        )
+        input_requests = dataset.sample(
+            tokenizer=tokenizer,
+            num_requests=args.num_prompts,
+            prefix_len=args.random_prefix_len,
+            range_ratio=args.random_range_ratio,
+            input_len=args.random_input_len,
+            output_len=args.random_output_len,
+            base_items_per_request=args.random_mm_base_items_per_request,
+            limit_mm_per_prompt=args.random_mm_limit_mm_per_prompt,
+            num_mm_items_range_ratio=args.random_mm_num_mm_items_range_ratio,
+            bucket_config=args.random_mm_bucket_config,
+            request_id_prefix=args.request_id_prefix,
+            no_oversample=args.no_oversample,
+        )
+        return input_requests
+    else:
+        return get_samples(args, tokenizer)
