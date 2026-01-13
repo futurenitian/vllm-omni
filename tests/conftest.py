@@ -1,20 +1,21 @@
 import base64
-import io
 import os
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+import io
 from pathlib import Path
 
 import cv2
 import psutil
 import soundfile as sf
 import torch
+import whisper
 import yaml
 import json
-import speech_recognition as sr
+
 import numpy as np
 from vllm.logger import init_logger
 from vllm.utils import get_open_port
@@ -61,7 +62,7 @@ def clean_gpu_memory_between_tests():
 
 
 def dummy_messages_from_mix_data(
-    system_prompt: dict[str, Any]=None,
+    system_prompt: dict[str, Any] = None,
     video_data_url: Any = None,
     audio_data_url: Any = None,
     image_data_url: Any = None,
@@ -171,30 +172,40 @@ def generate_synthetic_image(width: int, height: int) -> Any:
     return base64.b64encode(image_bytes).decode("utf-8")
 
 def cosine_similarity_text(s1, s2):
+    """
+        Calculate cosine similarity between two text strings.
+        Notes:
+    ------
+    - Higher score means more similar texts
+    - Score of 1.0 means identical word composition (bag-of-words)
+    - Score of 0.0 means completely different vocabulary
+    """
     from sklearn.feature_extraction.text import CountVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
+
     vectorizer = CountVectorizer().fit_transform([s1, s2])
     vectors = vectorizer.toarray()
     return cosine_similarity([vectors[0]], [vectors[1]])[0][0]
 
+
 def convert_audio_to_text(audio_data):
+    """
+    Convert base64 encoded audio data to text using speech recognition.
+    """
+
     audio_data = base64.b64decode(audio_data)
     output_path = f"./test_{int(time.time())}"
-    with open(output_path, 'wb') as audio_file:
+    with open(output_path, "wb") as audio_file:
         audio_file.write(audio_data)
 
     print(f"audio data is saved: {output_path}")
-    recognizer = sr.Recognizer()
-    with sr.AudioFile(output_path) as source:
-        audio_data = recognizer.record(source)
+    model = whisper.load_model("base")
+    text = model.transcribe(output_path)["text"]
+    if text:
+        return text
+    else:
+        return ""
 
-        print("Start voice recognition...")
-
-        text = recognizer.recognize_sphinx(audio_data)
-        if text:
-            return text
-        else:
-            return ""
 
 def modify_stage_config(
     yaml_path: str,
@@ -300,10 +311,6 @@ def run_benchmark(args: list) -> Any:
     with open(os.path.join(result_dir, result_filename), 'r', encoding='utf-8') as f:
         result = json.load(f)
     return result
-
-
-
-
 
 class OmniServer:
     """Omniserver for vLLM-Omni tests."""
