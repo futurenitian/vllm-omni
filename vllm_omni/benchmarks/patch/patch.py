@@ -1,21 +1,56 @@
-from vllm_omni.benchmarks.datasets.random_multi_modal_dataset import OmniRandomMultiModalDataset
+
 
 import os
 import sys
 import time
 import json
+import vllm
 import traceback
 from dataclasses import dataclass
 from typing import Literal
 import aiohttp
 import numpy as np
 from tqdm.asyncio import tqdm
+from transformers import PreTrainedTokenizerBase
+from vllm.benchmarks.datasets import SampleRequest
+
 from vllm.benchmarks.lib.endpoint_request_func import (_update_payload_common,
                                                        RequestFuncInput,_validate_api_url,_get_chat_content,
                                                        StreamedResponseHandler,_update_headers_common)
 
 
-AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
+vllm.benchmarks.lib.endpoint_request_func.async_request_openai_chat_completions = async_request_openai_chat_completions
+from vllm.benchmarks.datasets import get_samples as get_samples_old
+def get_samples(args, tokenizer):
+    from vllm_omni.benchmarks.datasets.random_multi_modal_dataset import OmniRandomMultiModalDataset
+    if args.dataset_name == "random-mm":
+        if args.backend not in [
+            "openai-chat"]:
+            raise ValueError(
+                "Multi-modal content (images) is only supported on "
+                "'openai-chat' backend."
+            )
+        dataset = OmniRandomMultiModalDataset(
+            random_seed=args.seed, dataset_path=args.dataset_path
+        )
+        input_requests = dataset.sample(
+            tokenizer=tokenizer,
+            num_requests=args.num_prompts,
+            prefix_len=args.random_prefix_len,
+            range_ratio=args.random_range_ratio,
+            input_len=args.random_input_len,
+            output_len=args.random_output_len,
+            base_items_per_request=args.random_mm_base_items_per_request,
+            limit_mm_per_prompt=args.random_mm_limit_mm_per_prompt,
+            num_mm_items_range_ratio=args.random_mm_num_mm_items_range_ratio,
+            bucket_config=args.random_mm_bucket_config,
+            request_id_prefix=args.request_id_prefix,
+            no_oversample=args.no_oversample,
+        )
+        return input_requests
+    else:
+        return get_samples_old(args, tokenizer)
+vllm.benchmarks.datasets.get_samples = get_samples
 
 from vllm.benchmarks.lib.endpoint_request_func import RequestFuncOutput as RequestFuncOutput_old
 
@@ -125,37 +160,15 @@ async def async_request_openai_chat_completions(
         pbar.update(1)
     return output
 
-vllm.benchmarks.lib.endpoint_request_func.async_request_openai_chat_completions = async_request_openai_chat_completions
-from vllm.benchmarks.datasets import get_sample as get_samples_old
-def get_samples(args, tokenizer):
-    if args.dataset_name == "random-mm":
-        if args.backend not in [
-            "openai-chat"]:
-            raise ValueError(
-                "Multi-modal content (images) is only supported on "
-                "'openai-chat' backend."
-            )
-        dataset = OmniRandomMultiModalDataset(
-            random_seed=args.seed, dataset_path=args.dataset_path
-        )
-        input_requests = dataset.sample(
-            tokenizer=tokenizer,
-            num_requests=args.num_prompts,
-            prefix_len=args.random_prefix_len,
-            range_ratio=args.random_range_ratio,
-            input_len=args.random_input_len,
-            output_len=args.random_output_len,
-            base_items_per_request=args.random_mm_base_items_per_request,
-            limit_mm_per_prompt=args.random_mm_limit_mm_per_prompt,
-            num_mm_items_range_ratio=args.random_mm_num_mm_items_range_ratio,
-            bucket_config=args.random_mm_bucket_config,
-            request_id_prefix=args.request_id_prefix,
-            no_oversample=args.no_oversample,
-        )
-        return input_requests
-    else:
-        return get_samples_old(args, tokenizer)
-vllm.benchmarks.datasets.get_samples = get_samples
+
+from vllm.benchmarks.serve import BenchmarkMetrics as BenchmarkMetrics_old
+@dataclass
+class BenchmarkMetrics(BenchmarkMetrics_old):
+    mean_audio_ttft_ms: float
+    median_audio_ttft_ms: float
+    std_audio_ttft_ms: float
+vllm.benchmarks.serve.BenchmarkMetrics = BenchmarkMetrics
+
 
 from vllm.benchmarks.serve import calculate_metrics as calculate_metrics_old
 def calculate_metrics(
@@ -183,9 +196,9 @@ def calculate_metrics(
         f"Mean Audio TTFT  (ms):",mean_ttft_ms))
     print("{:<40} {:<10.2f}".format(
         f"Median Audio TTFT (ms):",median_ttft_ms))
-    result[f"mean_audio_ttft_ms"] = mean_ttft_ms
-    result[f"median_audio_ttft_ms"] = median_ttft_ms
-    result[f"std_audio_ttft_ms"] = std_ttft_ms
+    result.mean_audio_ttft_ms = mean_ttft_ms
+    result.median_audio_ttft_ms = median_ttft_ms
+    result.std_audio_ttft_ms = std_ttft_ms
     for p, value in percentiles_ttft_ms:
         p_word = str(int(p)) if int(p) == p else str(p)
         print("{:<40} {:<10.2f}".format(f"P{p_word} Audio TTFT (ms):",

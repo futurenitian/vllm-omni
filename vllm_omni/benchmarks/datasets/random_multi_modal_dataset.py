@@ -1,14 +1,3 @@
-"""
-This module defines a framework for sampling benchmark requests from various
-datasets. Each dataset subclass of BenchmarkDataset must implement sample
-generation. Supported dataset types include:
-  - ShareGPT
-  - Random (synthetic)
-  - Sonnet
-  - BurstGPT
-  - HuggingFace
-  - VisionArena
-"""
 import base64
 import io
 import logging
@@ -21,7 +10,7 @@ import cv2
 import numpy as np
 import soundfile as sf
 import torch
-from vllm.benchmarks.datasets import RandomMultiModalDataset, get_samples, process_image
+from vllm.benchmarks.datasets import RandomMultiModalDataset, process_image
 
 logger = logging.getLogger(__name__)
 
