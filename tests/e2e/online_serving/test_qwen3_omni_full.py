@@ -17,6 +17,7 @@ from tests.conftest import (OmniServer, dummy_messages_from_mix_data, modify_sta
                             generate_synthetic_video, run_benchmark)
 
 from transformers import Qwen3OmniMoeForConditionalGeneration,Qwen3OmniMoeProcessor
+from qwen_omni_utils import process_mm_info
 
 os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
@@ -1204,8 +1205,19 @@ def test_transformers_comparison_001(test_config: tuple[str, str]) -> None:
         audio_data_url=audio_data_url,
         content_text="What is recited in the audio? What is in this image? Please describe the video briefly."
     )
-
-    inputs = messages.to(model.device).to(model.dtype)
+    USE_AUDIO_IN_VIDEO = True
+    messages = processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    audios, images, videos = process_mm_info(messages, use_audio_in_video=USE_AUDIO_IN_VIDEO)
+    inputs = processor(
+        text = messages,
+        audio=audios,
+        images=images,
+        videos=videos,
+        return_tensors="pt",
+        padding=True,
+        use_audio_in_video=USE_AUDIO_IN_VIDEO
+    )
+    inputs = inputs.to(model.device).to(model.dtype)
 
     text_ids, audio = model.generate(**inputs, speaker="Ethan", thinker_return_dict_in_generate=True,
                                      use_audio_in_video=USE_AUDIO_IN_VIDEO)
