@@ -19,6 +19,7 @@ from vllm.benchmarks import datasets
 get_samples_old = datasets.get_samples
 def get_samples(args, tokenizer):
     from vllm_omni.benchmarks.datasets.random_multi_modal_dataset import OmniRandomMultiModalDataset
+    from vllm_omni.benchmarks.datasets.ucf101_dataset import get_ucf101_samples
     if args.dataset_name == "random-mm":
         if args.backend not in [
             "openai-chat"]:
@@ -44,7 +45,16 @@ def get_samples(args, tokenizer):
             no_oversample=args.no_oversample,
         )
         return input_requests
-    else:
+
+    elif args.dataset_name == "ucf101":
+        if args.backend not in ["openai-chat"]:
+            raise ValueError(
+                "Multi-modal content (videos) is only supported on "
+                "'openai-chat' backend."
+            )
+        return get_ucf101_samples(args, tokenizer)
+
+    else:    
         return get_samples_old(args, tokenizer)
 datasets.get_samples = get_samples
 
