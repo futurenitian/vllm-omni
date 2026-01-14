@@ -156,7 +156,7 @@ async def async_request_openai_chat_completions(
     if pbar:
         pbar.update(1)
     return output
-ASYNC_REQUEST_FUNCS["VLLM"] = async_request_openai_chat_completions
+ASYNC_REQUEST_FUNCS["openai-chat"] = async_request_openai_chat_completions
 
 from vllm.benchmarks import serve
 BenchmarkMetrics_old = serve.BenchmarkMetrics
@@ -178,31 +178,8 @@ def calculate_metrics(
     selected_percentiles: list[float],
     goodput_config_dict: dict[str, float],
 ):
-    audio_ttfts = []
-    result, actual_output_lens = calculate_metrics_old(input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict)
-    for i in range(len(outputs)):
-        if outputs[i] is not None and outputs[i].success:
-            audio_ttfts.append(outputs[i].audio_ttft)
-    mean_ttft_ms = np.mean(audio_ttfts or 0) * 1000
-    std_ttft_ms = np.std(audio_ttfts or 0) * 1000
-    median_ttft_ms = np.median(audio_ttfts or 0) * 1000
-    percentiles_ttft_ms = [(p, np.percentile(audio_ttfts or 0, p) * 1000)
-                           for p in selected_percentiles]
-
-    print("{s:{c}^{n}}".format(s=' Supplemental result ', n=50, c='='))
-    print("{s:{c}^{n}}".format(s="Time to audio First Token", n=50, c='-'))
-    print("{:<40} {:<10.2f}".format(
-        f"Mean Audio TTFT  (ms):",mean_ttft_ms))
-    print("{:<40} {:<10.2f}".format(
-        f"Median Audio TTFT (ms):",median_ttft_ms))
-    result.mean_audio_ttft_ms = mean_ttft_ms
-    result.median_audio_ttft_ms = median_ttft_ms
-    result.std_audio_ttft_ms = std_ttft_ms
-    result.percentiles_audio_ttft_ms = percentiles_ttft_ms
-    for p, value in percentiles_ttft_ms:
-        p_word = str(int(p)) if int(p) == p else str(p)
-        print("{:<40} {:<10.2f}".format(f"P{p_word} Audio TTFT (ms):",
-                                        value))
-    print("=" * 50)
-    return result, actual_output_lens
+    from vllm_omni.benchmarks.metrics.metrics import calculate_metrics
+    metrics, actual_output_lens = calculate_metrics_old(input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict)
+    metrics = calculate_metrics(outputs, selected_percentiles, metrics)
+    return metrics, actual_output_lens
 serve.calculate_metrics = calculate_metrics
