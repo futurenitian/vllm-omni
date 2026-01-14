@@ -186,8 +186,7 @@ def generate_synthetic_video(width: int, height: int, num_frames: int) -> Any:
         frame = video_tensor[i].numpy()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         out.write(frame)
-        out.release()
-
+    out.release()
     with open(temp_path, "rb") as f:
         content = f.read()
     os.unlink(temp_path)
