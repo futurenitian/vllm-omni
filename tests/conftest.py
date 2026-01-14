@@ -539,10 +539,19 @@ class OmniRunner:
             if mm_input is None:
                 return [None] * num_prompts
             if isinstance(mm_input, list):
-                if len(mm_input) != num_prompts:
+                valid_condition = (len(mm_input) == num_prompts) or \
+                          (len(mm_input) == 1) or \
+                          (num_prompts == 1)
+                if not valid_condition:
                     raise ValueError(
-                        f"Multimodal input list length ({len(mm_input)}) must match prompts length ({num_prompts})"
+                        f"Multimodal input list length ({len(mm_input)}) must match prompts length ({num_prompts}) "
+                        f"or be 1 (for batch processing all prompts with the same multimodal input) "
+                        f"or prompts length be 1 (for batch processing all multimodal inputs with the same prompt)"
                     )
+                if num_prompts == 1:
+                    return mm_input
+                if len(mm_input) == 1:
+                    return mm_input * num_prompts        
                 return mm_input
             return [mm_input] * num_prompts
 
