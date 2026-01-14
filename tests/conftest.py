@@ -1,31 +1,29 @@
 import base64
+import io
+import json
 import os
 import socket
 import subprocess
 import sys
 import tempfile
 import time
-import io
+from collections.abc import Generator
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import cv2
+import numpy as np
 import psutil
+import pytest
 import soundfile as sf
 import torch
 import whisper
 import yaml
-import json
-
-import numpy as np
-from vllm.logger import init_logger
-from vllm.utils import get_open_port
-from collections.abc import Generator
-from typing import Any
-from datetime import datetime
-
-import pytest
 from vllm.distributed.parallel_state import cleanup_dist_env_and_memory
+from vllm.logger import init_logger
 from vllm.sampling_params import SamplingParams
+from vllm.utils import get_open_port
 
 from vllm_omni.entrypoints.omni import Omni
 
@@ -105,6 +103,46 @@ def dummy_messages_from_mix_data(
     return messages
 
 
+def messages_from_mix_data(
+    system_prompt: dict[str, Any] = None,
+    video_data_url: Any = None,
+    audio_data_url: Any = None,
+    image_data_url: Any = None,
+    content_text: str = None,
+):
+    """Create messages with video、image、audio data URL for OpenAI API."""
+
+    if content_text is not None:
+        content = [{"type": "text", "text": content_text}]
+    else:
+        content = []
+
+    media_items = []
+    if isinstance(video_data_url, list):
+        for video_url in video_data_url:
+            media_items.append((video_url, "video"))
+    else:
+        media_items.append((video_data_url, "video"))
+
+    if isinstance(image_data_url, list):
+        for url in image_data_url:
+            media_items.append((url, "image"))
+    else:
+        media_items.append((image_data_url, "image"))
+
+    if isinstance(audio_data_url, list):
+        for url in audio_data_url:
+            media_items.append((url, "audio"))
+    else:
+        media_items.append((audio_data_url, "audio"))
+
+    content.extend({"type": media_type, media_type: url} for url, media_type in media_items if url is not None)
+    messages = [{"role": "user", "content": content}]
+    if system_prompt is not None:
+        messages = [system_prompt] + messages
+    return messages
+
+
 def generate_synthetic_audio(
     duration: int,  # seconds
     num_channels: int,  # 1：Mono，2：Stereo 5：5.1 surround sound
@@ -170,6 +208,7 @@ def generate_synthetic_image(width: int, height: int) -> Any:
     image_bytes = buffer.read()
 
     return base64.b64encode(image_bytes).decode("utf-8")
+
 
 def cosine_similarity_text(s1, s2):
     """
@@ -281,26 +320,20 @@ def modify_stage_config(
 
     return output_path
 
+
 def run_benchmark(args: list) -> Any:
     """Generate synthetic image with random values."""
     current_dt = datetime.now().strftime("%Y%m%d-%H%M%S")
     result_filename = f"result_{current_dt}.json"
     if "--result-filename" in args:
         print(f"The result file will be overwritten by {result_filename}")
-    command = ["vllm-omni",
-                "bench",
-                "serve",
-                "--omni"] + args + ["--save-result","--result-filename", result_filename]
-    process = subprocess.Popen(command,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE,
-                              text=True,
-                              bufsize=1,
-                              universal_newlines=True)
+    command = ["vllm-omni", "bench", "serve", "--omni"] + args + ["--save-result", "--result-filename", result_filename]
+    process = subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, universal_newlines=True
+    )
 
-    for line in iter(process.stdout.readline, ''):
-        print(line, end=' ')
-
+    for line in iter(process.stdout.readline, ""):
+        print(line, end=" ")
 
     if "--result-dir" in args:
         index = args.index("--result-dir")
@@ -308,9 +341,10 @@ def run_benchmark(args: list) -> Any:
     else:
         result_dir = "./"
 
-    with open(os.path.join(result_dir, result_filename), 'r', encoding='utf-8') as f:
+    with open(os.path.join(result_dir, result_filename), encoding="utf-8") as f:
         result = json.load(f)
     return result
+
 
 class OmniServer:
     """Omniserver for vLLM-Omni tests."""
