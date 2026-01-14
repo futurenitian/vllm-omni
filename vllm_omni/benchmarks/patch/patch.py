@@ -158,18 +158,18 @@ async def async_request_openai_chat_completions(
     return output
 ASYNC_REQUEST_FUNCS["VLLM"] = async_request_openai_chat_completions
 
-
-from vllm.benchmarks.serve import BenchmarkMetrics as BenchmarkMetrics_old
+from vllm.benchmarks import serve
+BenchmarkMetrics_old = serve.BenchmarkMetrics
 @dataclass
 class BenchmarkMetrics(BenchmarkMetrics_old):
     mean_audio_ttft_ms: float = 0.0
     median_audio_ttft_ms: float = 0.0
     std_audio_ttft_ms: float = 0.0
     percentiles_audio_ttft_ms: list[tuple[float, float]] = None
-vllm.benchmarks.serve.BenchmarkMetrics = BenchmarkMetrics
+serve.BenchmarkMetrics = BenchmarkMetrics
 
 
-from vllm.benchmarks.serve import calculate_metrics as calculate_metrics_old
+calculate_metrics_old = serve.calculate_metrics
 def calculate_metrics(
     input_requests: list[SampleRequest],
     outputs: list[RequestFuncOutput],
@@ -205,4 +205,4 @@ def calculate_metrics(
                                         value))
     print("=" * 50)
     return result, actual_output_lens
-vllm.benchmarks.serve.calculate_metrics = calculate_metrics
+serve.calculate_metrics = calculate_metrics
