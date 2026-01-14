@@ -1,5 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 import argparse
 
 from vllm.entrypoints.cli.types import CLISubcommand
@@ -17,7 +15,7 @@ class OmniBenchmarkSubcommandBase(CLISubcommand):
 
     @staticmethod
     def cmd(args: argparse.Namespace) -> None:
-        """Run the benchmarks.
+        """Run the benchmark.
 
         Args:
             args: The arguments to the command.

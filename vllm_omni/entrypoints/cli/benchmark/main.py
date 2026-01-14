@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-
 from __future__ import annotations
 
 import argparse
@@ -45,7 +42,7 @@ class OmniBenchmarkSubcommand(CLISubcommand):
                 "--omni",
                 action="store_true",
                 default=True,
-                help="Enable benchmarks-Omni mode (always enabled for omni commands)",
+                help="Enable benchmark-Omni mode (always enabled for omni commands)",
             )
             cmd_subparser.set_defaults(dispatch_function=cmd_cls.cmd)
             cmd_cls.add_cli_args(cmd_subparser)

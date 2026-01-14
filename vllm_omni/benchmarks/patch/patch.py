@@ -1,5 +1,3 @@
-"""The request function for API endpoints."""
-
 import json
 import os
 import sys
@@ -10,26 +8,63 @@ from typing import Literal
 
 import aiohttp
 from tqdm.asyncio import tqdm
+from transformers import PreTrainedTokenizerBase
+from vllm.benchmarks import datasets
+from vllm.benchmarks.datasets import SampleRequest
 from vllm.benchmarks.lib.endpoint_request_func import (
-    RequestFunc,
+    ASYNC_REQUEST_FUNCS,
     RequestFuncInput,
-    RequestFuncOutput,
     StreamedResponseHandler,
     _get_chat_content,
     _update_headers_common,
     _update_payload_common,
     _validate_api_url,
-    async_request_openai_audio,
-    async_request_openai_completions,
-    async_request_openai_embeddings,
 )
 
-AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
+from vllm_omni.benchmarks.data_modules.random_multi_modal_dataset import OmniRandomMultiModalDataset
+
+get_samples_old = datasets.get_samples
+
+
+def get_samples(args, tokenizer):
+    if args.dataset_name == "random-mm":
+        if args.backend not in ["openai-chat"]:
+            raise ValueError("Multi-modal content (images) is only supported on 'openai-chat' backend.")
+        dataset = OmniRandomMultiModalDataset(random_seed=args.seed, dataset_path=args.dataset_path)
+        input_requests = dataset.sample(
+            tokenizer=tokenizer,
+            num_requests=args.num_prompts,
+            prefix_len=args.random_prefix_len,
+            range_ratio=args.random_range_ratio,
+            input_len=args.random_input_len,
+            output_len=args.random_output_len,
+            base_items_per_request=args.random_mm_base_items_per_request,
+            limit_mm_per_prompt=args.random_mm_limit_mm_per_prompt,
+            num_mm_items_range_ratio=args.random_mm_num_mm_items_range_ratio,
+            bucket_config=args.random_mm_bucket_config,
+            request_id_prefix=args.request_id_prefix,
+            no_oversample=args.no_oversample,
+        )
+        return input_requests
+    else:
+        return get_samples_old(args, tokenizer)
+
+
+datasets.get_samples = get_samples
+
+# ruff: noqa: E402
+# Prevent import order from causing patch failures
+from vllm.benchmarks.lib import endpoint_request_func
+
+RequestFuncOutput_old = endpoint_request_func.RequestFuncOutput
 
 
 @dataclass
-class MixRequestFuncOutput(RequestFuncOutput):
+class RequestFuncOutput(RequestFuncOutput_old):
     audio_ttft: float = 0.0
+
+
+endpoint_request_func.RequestFuncOutput = RequestFuncOutput
 
 
 async def async_request_openai_chat_completions(
@@ -37,7 +72,7 @@ async def async_request_openai_chat_completions(
     session: aiohttp.ClientSession,
     pbar: tqdm | None = None,
     mm_position: Literal["first", "last"] = "last",
-) -> MixRequestFuncOutput:
+) -> RequestFuncOutput:
     api_url = request_func_input.api_url
     _validate_api_url(api_url, "OpenAI Chat Completions API", "chat/completions")
 
@@ -63,7 +98,7 @@ async def async_request_openai_chat_completions(
     }
     _update_headers_common(headers, request_func_input)
 
-    output = MixRequestFuncOutput()
+    output = RequestFuncOutput()
     output.prompt_len = request_func_input.prompt_len
 
     generated_text = ""
@@ -131,17 +166,44 @@ async def async_request_openai_chat_completions(
     return output
 
 
-# TODO: Add more request functions for different API protocols.
-ASYNC_REQUEST_FUNCS: dict[str, RequestFunc] = {
-    "vllm": async_request_openai_completions,
-    "openai": async_request_openai_completions,
-    "openai-chat": async_request_openai_chat_completions,
-    "openai-audio": async_request_openai_audio,
-    "openai-embeddings": async_request_openai_embeddings,
-}
+ASYNC_REQUEST_FUNCS["openai-chat"] = async_request_openai_chat_completions
 
-OPENAI_COMPATIBLE_BACKENDS = [
-    k
-    for k, v in ASYNC_REQUEST_FUNCS.items()
-    if v in (async_request_openai_completions, async_request_openai_chat_completions)
-]
+# ruff: noqa: E402
+# Prevent import order from causing patch failures
+from vllm.benchmarks import serve
+
+BenchmarkMetrics_old = serve.BenchmarkMetrics
+
+
+@dataclass
+class BenchmarkMetrics(BenchmarkMetrics_old):
+    mean_audio_ttft_ms: float = 0.0
+    median_audio_ttft_ms: float = 0.0
+    std_audio_ttft_ms: float = 0.0
+    percentiles_audio_ttft_ms: list[tuple[float, float]] = None
+
+
+serve.BenchmarkMetrics = BenchmarkMetrics
+
+
+calculate_metrics_old = serve.calculate_metrics
+
+
+def calculate_metrics(
+    input_requests: list[SampleRequest],
+    outputs: list[RequestFuncOutput],
+    dur_s: float,
+    tokenizer: PreTrainedTokenizerBase,
+    selected_percentiles: list[float],
+    goodput_config_dict: dict[str, float],
+):
+    from vllm_omni.benchmarks.metrics.metrics import calculate_metrics
+
+    metrics, actual_output_lens = calculate_metrics_old(
+        input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict
+    )
+    metrics = calculate_metrics(outputs, selected_percentiles, metrics)
+    return metrics, actual_output_lens
+
+
+serve.calculate_metrics = calculate_metrics
