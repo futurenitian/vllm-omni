@@ -8,6 +8,7 @@ diffusion models (e.g., Qwen-Image) through the same CLI interface.
 import argparse
 
 import uvloop
+from vllm_omni.benchmarks.patch import patch
 from vllm.entrypoints.cli.types import CLISubcommand
 from vllm.entrypoints.openai.cli_args import make_arg_parser, validate_parsed_serve_args
 from vllm.entrypoints.utils import VLLM_SUBCMD_PARSER_EPILOG
