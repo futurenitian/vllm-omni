@@ -2,7 +2,6 @@ import os
 import sys
 import time
 import json
-import vllm
 import traceback
 from dataclasses import dataclass
 from typing import Literal
@@ -12,12 +11,12 @@ from tqdm.asyncio import tqdm
 from transformers import PreTrainedTokenizerBase
 from vllm.benchmarks.datasets import SampleRequest
 
-from vllm.benchmarks.lib.endpoint_request_func import (_update_payload_common,
+from vllm.benchmarks.lib.endpoint_request_func import (ASYNC_REQUEST_FUNCS,_update_payload_common,
                                                        RequestFuncInput,_validate_api_url,_get_chat_content,
                                                        StreamedResponseHandler,_update_headers_common)
 
-
-from vllm.benchmarks.datasets import get_samples as get_samples_old
+from vllm.benchmarks import datasets
+get_samples_old = datasets.get_samples
 def get_samples(args, tokenizer):
     from vllm_omni.benchmarks.datasets.random_multi_modal_dataset import OmniRandomMultiModalDataset
     if args.dataset_name == "random-mm":
@@ -47,15 +46,16 @@ def get_samples(args, tokenizer):
         return input_requests
     else:
         return get_samples_old(args, tokenizer)
-vllm.benchmarks.datasets.get_samples = get_samples
+datasets.get_samples = get_samples
 
-from vllm.benchmarks.lib.endpoint_request_func import RequestFuncOutput as RequestFuncOutput_old
-
+from vllm.benchmarks.lib import endpoint_request_func
+RequestFuncOutput_old = endpoint_request_func.RequestFuncOutput
 @dataclass
 class RequestFuncOutput(RequestFuncOutput_old):
     audio_ttft: float = 0.0
 
-vllm.benchmarks.lib.endpoint_request_func.RequestFuncOutput = RequestFuncOutput
+endpoint_request_func.RequestFuncOutput = RequestFuncOutput
+
 
 async def async_request_openai_chat_completions(
     request_func_input: RequestFuncInput,
@@ -156,7 +156,7 @@ async def async_request_openai_chat_completions(
     if pbar:
         pbar.update(1)
     return output
-vllm.benchmarks.lib.endpoint_request_func.async_request_openai_chat_completions = async_request_openai_chat_completions
+ASYNC_REQUEST_FUNCS["VLLM"] = async_request_openai_chat_completions
 
 
 from vllm.benchmarks.serve import BenchmarkMetrics as BenchmarkMetrics_old
