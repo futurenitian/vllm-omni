@@ -9,14 +9,15 @@ import aiohttp
 import numpy as np
 from tqdm.asyncio import tqdm
 from transformers import PreTrainedTokenizerBase
+from vllm.benchmarks import serve # 修改3：规范import
 from vllm.benchmarks.datasets import SampleRequest
-
+from vllm.benchmarks.lib import endpoint_request_func # 修改3：规范import
 from vllm.benchmarks.lib.endpoint_request_func import (ASYNC_REQUEST_FUNCS,_update_payload_common,
                                                        RequestFuncInput,_validate_api_url,_get_chat_content,
                                                        StreamedResponseHandler,_update_headers_common)
 
 from vllm.benchmarks import datasets
-get_samples_old = datasets.get_samples
+# get_samples_old = datasets.get_samples # 修改2：冗余的变量
 def get_samples(args, tokenizer):
     from vllm_omni.benchmarks.datasets.random_multi_modal_dataset import OmniRandomMultiModalDataset
     from vllm_omni.benchmarks.datasets.ucf101_dataset import get_ucf101_samples
@@ -55,10 +56,10 @@ def get_samples(args, tokenizer):
         return get_ucf101_samples(args, tokenizer)
 
     else:    
-        return get_samples_old(args, tokenizer)
+        return datasets.get_samples(args, tokenizer)  # 修改2：冗余的变量
 datasets.get_samples = get_samples
 
-from vllm.benchmarks.lib import endpoint_request_func
+
 RequestFuncOutput_old = endpoint_request_func.RequestFuncOutput
 @dataclass
 class RequestFuncOutput(RequestFuncOutput_old):
@@ -168,7 +169,6 @@ async def async_request_openai_chat_completions(
     return output
 ASYNC_REQUEST_FUNCS["openai-chat"] = async_request_openai_chat_completions
 
-from vllm.benchmarks import serve
 BenchmarkMetrics_old = serve.BenchmarkMetrics
 @dataclass
 class BenchmarkMetrics(BenchmarkMetrics_old):
@@ -179,7 +179,7 @@ class BenchmarkMetrics(BenchmarkMetrics_old):
 serve.BenchmarkMetrics = BenchmarkMetrics
 
 
-calculate_metrics_old = serve.calculate_metrics
+calculate_metrics_txt = serve.calculate_metrics # 修改4：规范命名
 def calculate_metrics(
     input_requests: list[SampleRequest],
     outputs: list[RequestFuncOutput],
@@ -188,8 +188,8 @@ def calculate_metrics(
     selected_percentiles: list[float],
     goodput_config_dict: dict[str, float],
 ):
-    from vllm_omni.benchmarks.metrics.metrics import calculate_metrics
-    metrics, actual_output_lens = calculate_metrics_old(input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict)
-    metrics = calculate_metrics(outputs, selected_percentiles, metrics)
+    from vllm_omni.benchmarks.metrics.metrics import calculate_metrics_audio  # 对应修改1
+    metrics, actual_output_lens = calculate_metrics_txt(input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict) # 规范4
+    metrics = calculate_metrics_audio(outputs, selected_percentiles, metrics) # 对应修改1
     return metrics, actual_output_lens
 serve.calculate_metrics = calculate_metrics

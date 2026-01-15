@@ -1,10 +1,10 @@
 import numpy as np
 from vllm.benchmarks.lib.endpoint_request_func import RequestFuncOutput
 from vllm.benchmarks.serve import BenchmarkMetrics
-def calculate_metrics(
+def calculate_metrics_audio(
     outputs: list[RequestFuncOutput],
     selected_percentiles: list[float],
-    metrics: BenchmarkMetrics
+    metrics: BenchmarkMetrics  # 添加修改1：使函数命名更具描述性
 ):
     audio_ttfts = []
     for i in range(len(outputs)):
