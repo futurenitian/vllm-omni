@@ -57,8 +57,8 @@ def get_samples(args, tokenizer):
         return datasets.get_samples(args, tokenizer)  # 修改2：冗余的变量
 datasets.get_samples = get_samples
 
-from vllm.benchmarks.lib.endpoint_request_func import RequestFuncOutput
-
+from vllm.benchmarks.lib import endpoint_request_func
+RequestFuncOutput_old = endpoint_request_func.RequestFuncOutput
 @dataclass
 class MixRequestFuncOutput(RequestFuncOutput):
     audio_ttft: float = 0.0
