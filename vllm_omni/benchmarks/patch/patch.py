@@ -9,9 +9,7 @@ import aiohttp
 import numpy as np
 from tqdm.asyncio import tqdm
 from transformers import PreTrainedTokenizerBase
-from vllm.benchmarks import serve # 修改3：规范import
 from vllm.benchmarks.datasets import SampleRequest
-from vllm.benchmarks.lib import endpoint_request_func # 修改3：规范import
 from vllm.benchmarks.lib.endpoint_request_func import (ASYNC_REQUEST_FUNCS,_update_payload_common,
                                                        RequestFuncInput,_validate_api_url,_get_chat_content,
                                                        StreamedResponseHandler,_update_headers_common)
@@ -59,21 +57,19 @@ def get_samples(args, tokenizer):
         return datasets.get_samples(args, tokenizer)  # 修改2：冗余的变量
 datasets.get_samples = get_samples
 
+from vllm.benchmarks.lib.endpoint_request_func import RequestFuncOutput
 
-RequestFuncOutput_old = endpoint_request_func.RequestFuncOutput
 @dataclass
-class RequestFuncOutput(RequestFuncOutput_old):
+class MixRequestFuncOutput(RequestFuncOutput):
     audio_ttft: float = 0.0
 
-endpoint_request_func.RequestFuncOutput = RequestFuncOutput
 
-
-async def async_request_openai_chat_completions(
+async def async_request_openai_chat_omni_completions(
     request_func_input: RequestFuncInput,
     session: aiohttp.ClientSession,
     pbar: tqdm | None = None,
     mm_position: Literal["first", "last"] = "last",
-) -> RequestFuncOutput:
+) -> MixRequestFuncOutput:
     api_url = request_func_input.api_url
     _validate_api_url(api_url, "OpenAI Chat Completions API", "chat/completions")
 
@@ -167,8 +163,9 @@ async def async_request_openai_chat_completions(
     if pbar:
         pbar.update(1)
     return output
-ASYNC_REQUEST_FUNCS["openai-chat"] = async_request_openai_chat_completions
+ASYNC_REQUEST_FUNCS["openai-chat-omni"] = async_request_openai_chat_omni_completions
 
+from vllm.benchmarks import serve
 BenchmarkMetrics_old = serve.BenchmarkMetrics
 @dataclass
 class BenchmarkMetrics(BenchmarkMetrics_old):
