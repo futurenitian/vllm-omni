@@ -15,7 +15,7 @@ from vllm.benchmarks.lib.endpoint_request_func import (ASYNC_REQUEST_FUNCS,_upda
                                                        StreamedResponseHandler,_update_headers_common)
 
 from vllm.benchmarks import datasets
-# get_samples_old = datasets.get_samples # 修改2：冗余的变量
+get_samples_old = datasets.get_samples
 def get_samples(args, tokenizer):
     from vllm_omni.benchmarks.datasets.random_multi_modal_dataset import OmniRandomMultiModalDataset
     from vllm_omni.benchmarks.datasets.ucf101_dataset import get_ucf101_samples
@@ -54,13 +54,13 @@ def get_samples(args, tokenizer):
         return get_ucf101_samples(args, tokenizer)
 
     else:    
-        return datasets.get_samples(args, tokenizer)  # 修改2：冗余的变量
+        return get_samples_old(args, tokenizer)
 datasets.get_samples = get_samples
 
 from vllm.benchmarks.lib import endpoint_request_func
 RequestFuncOutput_old = endpoint_request_func.RequestFuncOutput
 @dataclass
-class MixRequestFuncOutput(RequestFuncOutput):
+class MixRequestFuncOutput(endpoint_request_func.RequestFuncOutput):
     audio_ttft: float = 0.0
 
 
@@ -97,7 +97,7 @@ async def async_request_openai_chat_omni_completions(
     }
     _update_headers_common(headers, request_func_input)
 
-    output = RequestFuncOutput()
+    output = MixRequestFuncOutput()
     output.prompt_len = request_func_input.prompt_len
 
     generated_text = ""
@@ -176,17 +176,17 @@ class BenchmarkMetrics(BenchmarkMetrics_old):
 serve.BenchmarkMetrics = BenchmarkMetrics
 
 
-calculate_metrics_txt = serve.calculate_metrics # 修改4：规范命名
+calculate_metrics_txt = serve.calculate_metrics # 修改2：规范命名
 def calculate_metrics(
     input_requests: list[SampleRequest],
-    outputs: list[RequestFuncOutput],
+    outputs: list[MixRequestFuncOutput],
     dur_s: float,
     tokenizer: PreTrainedTokenizerBase,
     selected_percentiles: list[float],
     goodput_config_dict: dict[str, float],
 ):
     from vllm_omni.benchmarks.metrics.metrics import calculate_metrics_audio  # 对应修改1
-    metrics, actual_output_lens = calculate_metrics_txt(input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict) # 规范4
+    metrics, actual_output_lens = calculate_metrics_txt(input_requests, outputs, dur_s, tokenizer, selected_percentiles, goodput_config_dict) # 修改2
     metrics = calculate_metrics_audio(outputs, selected_percentiles, metrics) # 对应修改1
     return metrics, actual_output_lens
 serve.calculate_metrics = calculate_metrics
