@@ -66,12 +66,6 @@ def get_ucf101_samples(args, tokenizer) -> List[SampleRequest]:
         raise RuntimeError(f"Failed to load UCF101 dataset from {dataset_root}: {e}")
 
 def extract_video_bytes(sample: Dict[str, Any], dataset_root: str) -> bytes:
-    """
-    从样本中提取视频字节（适配本地绝对路径的数据集）
-    :param sample: 数据集样本
-    :param dataset_root: 数据集根路径（/data2/fwl/.../datasets）
-    :return: 视频字节流
-    """
     # 情况1：样本中直接有视频字节
     if isinstance(sample.get('video'), bytes):
         return sample['video']
