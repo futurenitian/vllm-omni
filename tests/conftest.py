@@ -1,31 +1,29 @@
 import base64
+import io
+import json
 import os
 import socket
 import subprocess
 import sys
 import tempfile
 import time
-import io
+from collections.abc import Generator
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import cv2
+import numpy as np
 import psutil
+import pytest
 import soundfile as sf
 import torch
 import whisper
 import yaml
-import json
-
-import numpy as np
-from vllm.logger import init_logger
-from vllm.utils import get_open_port
-from collections.abc import Generator
-from typing import Any
-from datetime import datetime
-
-import pytest
 from vllm.distributed.parallel_state import cleanup_dist_env_and_memory
+from vllm.logger import init_logger
 from vllm.sampling_params import SamplingParams
+from vllm.utils import get_open_port
 
 from vllm_omni.entrypoints.omni import Omni
 
@@ -148,8 +146,7 @@ def generate_synthetic_video(width: int, height: int, num_frames: int) -> Any:
         frame = video_tensor[i].numpy()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         out.write(frame)
-        out.release()
-
+    out.release()
     with open(temp_path, "rb") as f:
         content = f.read()
     os.unlink(temp_path)
@@ -170,6 +167,7 @@ def generate_synthetic_image(width: int, height: int) -> Any:
     image_bytes = buffer.read()
 
     return base64.b64encode(image_bytes).decode("utf-8")
+
 
 def cosine_similarity_text(s1, s2):
     """
@@ -281,26 +279,20 @@ def modify_stage_config(
 
     return output_path
 
+
 def run_benchmark(args: list) -> Any:
     """Generate synthetic image with random values."""
     current_dt = datetime.now().strftime("%Y%m%d-%H%M%S")
     result_filename = f"result_{current_dt}.json"
     if "--result-filename" in args:
         print(f"The result file will be overwritten by {result_filename}")
-    command = ["vllm-omni",
-                "bench",
-                "serve",
-                "--omni"] + args + ["--save-result","--result-filename", result_filename]
-    process = subprocess.Popen(command,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE,
-                              text=True,
-                              bufsize=1,
-                              universal_newlines=True)
+    command = ["vllm-omni", "bench", "serve", "--omni"] + args + ["--save-result", "--result-filename", result_filename]
+    process = subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, universal_newlines=True
+    )
 
-    for line in iter(process.stdout.readline, ''):
-        print(line, end=' ')
-
+    for line in iter(process.stdout.readline, ""):
+        print(line, end=" ")
 
     if "--result-dir" in args:
         index = args.index("--result-dir")
@@ -308,9 +300,10 @@ def run_benchmark(args: list) -> Any:
     else:
         result_dir = "./"
 
-    with open(os.path.join(result_dir, result_filename), 'r', encoding='utf-8') as f:
+    with open(os.path.join(result_dir, result_filename), encoding="utf-8") as f:
         result = json.load(f)
     return result
+
 
 class OmniServer:
     """Omniserver for vLLM-Omni tests."""
