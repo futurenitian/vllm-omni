@@ -88,7 +88,7 @@ async def async_request_openai_chat_omni_completions(
             {"role": "user", "content": content},
         ],
         "temperature": 0.0,
-        "max_completion_tokens": request_func_input.output_len,
+        "max_tokens": request_func_input.output_len,
         "stream": True,
         "stream_options": {
             "include_usage": True,
