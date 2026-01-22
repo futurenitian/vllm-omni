@@ -21,7 +21,7 @@ from tests.conftest import (
     dummy_messages_from_mix_data,
     generate_synthetic_audio,
     generate_synthetic_image,
-    generate_synthetic_video，
+    generate_synthetic_video,
     modify_stage_config
 )
 
