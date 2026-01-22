@@ -411,6 +411,7 @@ def test_video_to_text_001(test_config: tuple[str, str]) -> None:
             f"Token count mismatch: expected 10, got {chat_completion.usage.completion_tokens}"
         )
 
+
 @pytest.mark.parametrize("test_config", test_params)
 def test_video_to_text_audio_001(test_config: tuple[str, str]) -> None:
     """Test processing video, generating text+audio output via OpenAI API (5 concurrent requests)."""
