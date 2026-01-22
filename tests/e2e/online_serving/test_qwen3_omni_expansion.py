@@ -22,7 +22,7 @@ from tests.conftest import (
     generate_synthetic_audio,
     generate_synthetic_image,
     generate_synthetic_video,
-    modify_stage_config
+    modify_stage_config,
 )
 
 models = ["Qwen/Qwen3-Omni-30B-A3B-Instruct"]
@@ -404,7 +404,7 @@ def test_video_to_text_001(test_config: tuple[str, str]) -> None:
 
         # Verify text output success
         text_choice = chat_completion.choices[0]
-        assert text_choice.message.content is not None and text_choice.message.content.strip(), ( 
+        assert text_choice.message.content is not None and text_choice.message.content.strip(), (
             "No text output generated"
         )
         assert chat_completion.usage.completion_tokens <= 10, (
