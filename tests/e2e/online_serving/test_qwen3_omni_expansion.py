@@ -476,13 +476,13 @@ def test_video_to_text_audio_001(test_config: tuple[str, str]) -> None:
             assert chat_completion.usage.completion_tokens <= 10, (
                 "The output length differs from the requested max_tokens."
             )
-            
+
             # Verify audio output success
             audio_message = chat_completion.choices[1].message
             audio_data = audio_message.audio.data
             assert audio_data is not None, "No audio output is generated"
             assert audio_message.audio.expires_at > time.time(), "The generated audio has expired."
-            
+
             # Verify text output same as audio output
             audio_content = convert_audio_to_text(audio_data)
             print(f"text content is: {text_content}")
