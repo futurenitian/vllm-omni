@@ -72,9 +72,9 @@ def print_text_metrics(task_type, selected_percentile_metrics, metrics: MultiMod
 
 def print_audio_metrics(selected_percentile_metrics, metrics: MultiModalsBenchmarkMetrics):
     print("{s:{c}^{n}}".format(s=" Audio Result ", n=50, c="="))
-    print("{:<40} {:<10}".format("Total audio duration generated(s):", metrics.total_audio_duration_ms))
+    print("{:<40} {:<10.2f}".format("Total audio duration generated(s):", metrics.total_audio_duration_ms))
     print("{:<40} {:<10}".format("Total audio frames generated:", metrics.total_audio_frames))
-    print("{:<40} {:<10}".format("Audio throughput(audio duration/s):", metrics.audio_throughput))
+    print("{:<40} {:<10.2f}".format("Audio throughput(audio duration/s):", metrics.audio_throughput))
     for metric in selected_percentile_metrics:
         if metric.startswith("audio"):
             process_one_metric(metric, metrics)
