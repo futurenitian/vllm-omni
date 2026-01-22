@@ -22,3 +22,12 @@ If you have custom stage configs file, launch the server with command below
 ```bash
 vllm serve Qwen/Qwen2.5-Omni-7B --omni --stage-configs-path /path/to/stage_configs_file
 ```
+
+
+## bench
+
+Run benchmark tests for online serving throughput.
+
+```bash
+vllm bench serve --omni
+```
