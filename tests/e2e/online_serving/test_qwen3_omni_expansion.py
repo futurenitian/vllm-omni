@@ -21,8 +21,8 @@ from tests.conftest import (
     dummy_messages_from_mix_data,
     generate_synthetic_audio,
     generate_synthetic_image,
-    modify_stage_config,
-    generate_synthetic_video
+    generate_synthetic_video，
+    modify_stage_config
 )
 
 models = ["Qwen/Qwen3-Omni-30B-A3B-Instruct"]
@@ -404,9 +404,12 @@ def test_video_to_text_001(test_config: tuple[str, str]) -> None:
 
         # Verify text output success
         text_choice = chat_completion.choices[0]
-        assert text_choice.message.content is not None and text_choice.message.content.strip(), "No text output generated"
-        assert chat_completion.usage.completion_tokens <= 10, f"Token count mismatch: expected 10, got {chat_completion.usage.completion_tokens}"
-
+        assert text_choice.message.content is not None and text_choice.message.content.strip(), ( 
+            "No text output generated"
+        )    
+        assert chat_completion.usage.completion_tokens <= 10, (
+            f"Token count mismatch: expected 10, got {chat_completion.usage.completion_tokens}"
+        )
 
 @pytest.mark.parametrize("test_config", test_params)
 def test_video_to_text_audio_001(test_config: tuple[str, str]) -> None:
@@ -466,9 +469,13 @@ def test_video_to_text_audio_001(test_config: tuple[str, str]) -> None:
             # Verify text output success
             text_choice = chat_completion.choices[0]
             text_content = text_choice.message.content
-            assert text_choice.message.content is not None and text_choice.message.content.strip(), "No text output is generated"
-            assert chat_completion.usage.completion_tokens <= 10, "The output length differs from the requested max_tokens."
-
+            assert text_choice.message.content is not None and text_choice.message.content.strip(), (
+                "No text output is generated"
+            )    
+            assert chat_completion.usage.completion_tokens <= 10, (
+                "The output length differs from the requested max_tokens."
+            )
+            
             # Verify audio output success
             audio_message = chat_completion.choices[1].message
             audio_data = audio_message.audio.data
@@ -479,4 +486,6 @@ def test_video_to_text_audio_001(test_config: tuple[str, str]) -> None:
             audio_content = convert_audio_to_text(audio_data)
             print(f"text content is: {text_content}")
             print(f"audio content is: {audio_content}")
-            assert cosine_similarity_text(audio_content, text_content) > 0.9, "The audio content is not same as the text"
+            assert cosine_similarity_text(audio_content, text_content) > 0.9, (
+                "The audio content is not same as the text"
+            )
