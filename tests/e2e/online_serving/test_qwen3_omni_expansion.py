@@ -406,7 +406,7 @@ def test_video_to_text_001(test_config: tuple[str, str]) -> None:
         text_choice = chat_completion.choices[0]
         assert text_choice.message.content is not None and text_choice.message.content.strip(), ( 
             "No text output generated"
-        )    
+        )
         assert chat_completion.usage.completion_tokens <= 10, (
             f"Token count mismatch: expected 10, got {chat_completion.usage.completion_tokens}"
         )
@@ -471,7 +471,7 @@ def test_video_to_text_audio_001(test_config: tuple[str, str]) -> None:
             text_content = text_choice.message.content
             assert text_choice.message.content is not None and text_choice.message.content.strip(), (
                 "No text output is generated"
-            )    
+            )
             assert chat_completion.usage.completion_tokens <= 10, (
                 "The output length differs from the requested max_tokens."
             )
