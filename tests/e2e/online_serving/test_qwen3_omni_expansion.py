@@ -465,6 +465,7 @@ def test_video_to_text_audio_001(test_config: tuple[str, str]) -> None:
         for chat_completion in chat_completions:
             # Verify text output success
             text_choice = chat_completion.choices[0]
+            text_content = text_choice.message.content
             assert text_choice.message.content is not None and text_choice.message.content.strip(), "No text output is generated"
             assert chat_completion.usage.completion_tokens <= 10, "The output length differs from the requested max_tokens."
 
