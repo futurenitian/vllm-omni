@@ -134,26 +134,24 @@ async def async_request_openai_chat_omni_completions(
                             data = json.loads(chunk)
 
                             if choices := data.get("choices"):
+                                modality = data.get("modality")
                                 content = choices[0]["delta"].get("content")
-                                # First token
-                                if ttft == 0.0:
-                                    ttft = timestamp - st
-                                    output.ttft = ttft
-
-                                # Decoding phase
-                                else:
-                                    modality = data.get("modality")
-                                    if modality == "text":
+                                if modality == "text":
+                                    # First token
+                                    if ttft == 0.0:
+                                        ttft = timestamp - st
+                                        output.ttft = ttft
+                                    else:
                                         output.itl.append(timestamp - most_recent_timestamp)
-                                    if modality == "audio":
-                                        output.audio_ttfp = timestamp - most_recent_timestamp
-                                        audio_bytes = base64.b64decode(content)
-                                        audio_io = io.BytesIO(audio_bytes)
-                                        audio = AudioSegment.from_file(audio_io)
-                                        output.audio_duration = len(audio) / 1000.0
-                                        output.audio_frames = len(audio.raw_data) // audio.frame_width
+                                    generated_text += content or ""
+                                elif modality == "audio":
+                                    output.audio_ttfp = timestamp - most_recent_timestamp
+                                    audio_bytes = base64.b64decode(content)
+                                    audio_io = io.BytesIO(audio_bytes)
+                                    audio = AudioSegment.from_file(audio_io)
+                                    output.audio_duration = len(audio) / 1000.0
+                                    output.audio_frames = len(audio.raw_data) // audio.frame_width
 
-                                generated_text += content or ""
                             elif usage := data.get("usage"):
                                 output.output_tokens = usage.get("completion_tokens")
 

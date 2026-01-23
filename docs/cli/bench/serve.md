@@ -70,6 +70,12 @@ Specify to save benchmark results to a json file
         "If not specified, results will be saved in "
         "{label}-{args.request_rate}qps-{base_model_id}-{current_dt}.json"
 
+- `--extra-body`  
+With the vLLM Omni OpenAI client, you can specify output modalities using the `extra_body` parameter:
+    - Text only: `extra_body={"modalities": ["text"]}`
+    - Text and audio: `extra_body={"modalities": ["text", "audio"]}`
+    - Audio only: `extra_body={"modalities": ["audio"]}`
+
 ## Usage Examples
 
 ### Online Benchmark
