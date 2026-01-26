@@ -91,7 +91,7 @@ vllm serve Qwen/Qwen2.5-Omni-7B --omni
 Then run the benchmarking for sharegpt:
 
 ```bash
-# download dataset
+# you can download dataset
 # wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 vllm bench serve \
   --omni \
