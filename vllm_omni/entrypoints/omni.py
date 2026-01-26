@@ -232,6 +232,8 @@ class OmniBase:
         self.worker_backend = worker_backend
         self.ray_address = ray_address
         self.batch_timeout = batch_timeout
+        # async chunk remains the same for each stage
+        self.async_chunk = self._is_async_chunk_enable(self.stage_configs)
 
         # Build OmniStage instances in parallel, preserve original order
         def _build_stage(idx_cfg: tuple[int, Any]) -> tuple[int, OmniStage]:
@@ -260,6 +262,11 @@ class OmniBase:
         self._start_stages(model)
         # Wait for all stages to report readiness before seeding
         self._wait_for_stages_ready(timeout=init_timeout)
+
+    def _is_async_chunk_enable(self, stage_args: list) -> bool:
+        """get async chunk flag"""
+        engine_args = getattr(stage_args[0], "engine_args", None)
+        return bool(getattr(engine_args, "async_chunk", False))
 
     def _start_stages(self, model: str) -> None:
         """Start all stage processes."""
@@ -345,6 +352,7 @@ class OmniBase:
         )
 
         suggestions = [
+            f"Ignore this warning if the model weight download / load from disk time is longer than {timeout}s.",
             "Verify GPU/device assignment in config (runtime.devices) is correct.",
             "Check GPU/host memory availability; reduce model or batch size if needed.",
             "Check model weights path and network reachability (if loading remotely).",
@@ -353,7 +361,7 @@ class OmniBase:
 
         formatted_suggestions = "\n".join(f"  {i + 1}) {msg}" for i, msg in enumerate(suggestions))
 
-        logger.error(f"[{self._name}] Stage initialization failed. Troubleshooting Steps:\n{formatted_suggestions}")
+        logger.warning(f"[{self._name}] Stage initialization timeout. Troubleshooting Steps:\n{formatted_suggestions}")
 
     def start_profile(self, stages: list[int] | None = None) -> None:
         """Start profiling for specified stages.
