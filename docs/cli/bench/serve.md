@@ -158,7 +158,7 @@ vllm bench serve \
   --dataset-path ShareGPT_V3_unfiltered_cleaned_split.json \
   --percentile-metrics ttft,tpot,itl,e2el
 ```
-
+If successful, you will see the following output:
 ```text
 ============ Serving Benchmark Result ============
 Successful requests:                     2
@@ -260,6 +260,8 @@ Median AUDIO_RTF:                        3.75
 P99 AUDIO_RTF:                           7.39
 ==================================================
 ```
+Notes:
+We use (audio generation time - first packet latency) / audio duration to calculate RTF.
 
 </details>
 
