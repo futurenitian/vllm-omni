@@ -17,10 +17,10 @@ class MultiModalsBenchmarkMetrics(BenchmarkMetrics):
     total_audio_duration_ms: float = 0.0
     total_audio_frames: int = 0
     audio_throughput: float = 0.0
-    mean_audio_rtf_ms: float = 0.0
-    median_audio_rtf_ms: float = 0.0
-    std_audio_rtf_ms: float = 0.0
-    percentiles_audio_rtf_ms: list[tuple[float, float]] = None
+    mean_audio_rtf: float = 0.0
+    median_audio_rtf: float = 0.0
+    std_audio_rtf: float = 0.0
+    percentiles_audio_rtf: list[tuple[float, float]] = None
 
 
 def print_metrics(
@@ -45,6 +45,8 @@ def print_metrics(
         print("{:<40} {:<10.2f}".format("Request goodput (req/s):", metrics.request_goodput))
     if isinstance(metrics, MultiModalsBenchmarkMetrics):
         print("{:<40} {:<10.2f}".format("Peak concurrent requests:", metrics.max_concurrent_requests))
+    if task_type != TaskType.GENERATION or "e2el" in selected_percentile_metrics:
+        process_one_metric("e2el", metrics)
     print_text_metrics(task_type, selected_percentile_metrics, metrics)
     if task_type == TaskType.GENERATION:
         print_audio_metrics(selected_percentile_metrics, metrics)
@@ -64,10 +66,10 @@ def print_text_metrics(task_type, selected_percentile_metrics, metrics: MultiMod
 
     if task_type == TaskType.GENERATION:
         for metric in selected_percentile_metrics:
+            if metric == "e2el":
+                continue
             if not metric.startswith("audio"):
                 process_one_metric(metric, metrics)
-    else:
-        process_one_metric("e2el", metrics)
 
 
 def print_audio_metrics(selected_percentile_metrics, metrics: MultiModalsBenchmarkMetrics):
@@ -81,12 +83,9 @@ def print_audio_metrics(selected_percentile_metrics, metrics: MultiModalsBenchma
 
 
 def process_one_metric(
-    # E.g., "ttft"
     metric_attribute_name: str,
     metrics: MultiModalsBenchmarkMetrics,
 ):
-    # This function prints and adds statistics of the specified
-    # metric.
     metric_header_map = {
         "ttft": "Time to First Token",
         "tpot": "Time per Output Token (excl. 1st token)",
@@ -95,22 +94,30 @@ def process_one_metric(
         "audio_ttfp": "Time to First Packet",
         "audio_rtf": "Real Time Factor",
     }
-    print("{s:{c}^{n}}".format(s=metric_header_map[metric_attribute_name], n=50, c="-"))
-    print(
-        "{:<40} {:<10.2f}".format(
-            f"Mean {metric_attribute_name.upper()} (ms):",
-            getattr(metrics, f"mean_{metric_attribute_name}_ms"),
-        )
-    )
-    print(
-        "{:<40} {:<10.2f}".format(
-            f"Median {metric_attribute_name.upper()} (ms):",
-            getattr(metrics, f"median_{metric_attribute_name}_ms"),
-        )
-    )
-    for p, value in getattr(metrics, f"percentiles_{metric_attribute_name}_ms"):
-        p_word = str(int(p)) if int(p) == p else str(p)
-        print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_attribute_name.upper()} (ms):", value))
+
+    header = metric_header_map.get(metric_attribute_name, metric_attribute_name)
+    print("{s:{c}^{n}}".format(s=header, n=50, c="-"))
+
+    is_audio_rtf = metric_attribute_name == "audio_rtf"
+
+    suffix = "" if is_audio_rtf else "_ms"
+    unit_suffix = "" if is_audio_rtf else " (ms)"
+
+    mean_attr_name = f"mean_{metric_attribute_name}{suffix}"
+    mean_value = getattr(metrics, mean_attr_name, 0.0)
+    print(f"{f'Mean {metric_attribute_name.upper()}{unit_suffix}:':<40} {mean_value:<10.2f}")
+
+    median_attr_name = f"median_{metric_attribute_name}{suffix}"
+    median_value = getattr(metrics, median_attr_name, 0.0)
+    print(f"{f'Median {metric_attribute_name.upper()}{unit_suffix}:':<40} {median_value:<10.2f}")
+
+    percentiles_attr_name = f"percentiles_{metric_attribute_name}{suffix}"
+    percentiles = getattr(metrics, percentiles_attr_name, [])
+
+    for percentile, value in percentiles:
+        p_str = str(int(percentile)) if percentile.is_integer() else str(percentile)
+        label = f"P{p_str} {metric_attribute_name.upper()}{unit_suffix}:"
+        print(f"{label:<40} {value:<10.2f}")
 
 
 def calculate_metrics(
@@ -292,10 +299,10 @@ def calculate_metrics(
         total_audio_duration_ms=sum(audio_duration),
         total_audio_frames=sum(audio_frames),
         audio_throughput=sum(audio_duration) / dur_s,
-        mean_audio_rtf_ms=np.mean(audio_rtfs or 0) * 1000,
-        std_audio_rtf_ms=np.std(audio_rtfs or 0) * 1000,
-        median_audio_rtf_ms=np.median(audio_rtfs or 0) * 1000,
-        percentiles_audio_rtf_ms=[(p, np.percentile(audio_rtfs or 0, p) * 1000) for p in selected_percentiles],
+        mean_audio_rtf=np.mean(audio_rtfs or 0),
+        std_audio_rtf=np.std(audio_rtfs or 0),
+        median_audio_rtf=np.median(audio_rtfs or 0),
+        percentiles_audio_rtf=[(p, np.percentile(audio_rtfs or 0, p)) for p in selected_percentiles],
         mean_tpot_ms=np.mean(tpots or 0) * 1000,
         std_tpot_ms=np.std(tpots or 0) * 1000,
         median_tpot_ms=np.median(tpots or 0) * 1000,

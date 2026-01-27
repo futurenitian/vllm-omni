@@ -106,10 +106,13 @@ async def async_request_openai_chat_omni_completions(
     output.prompt_len = request_func_input.prompt_len
 
     generated_text = ""
+    generated_audio = ""
     ttft = 0.0
     st = time.perf_counter()
     output.start_time = st
     most_recent_timestamp = st
+    audio_generate_time = 0.0
+    audio_first_timestamp = st
     try:
         async with session.post(url=api_url, json=payload, headers=headers) as response:
             if response.status == 200:
@@ -132,7 +135,6 @@ async def async_request_openai_chat_omni_completions(
                         if chunk != "[DONE]":
                             timestamp = time.perf_counter()
                             data = json.loads(chunk)
-
                             if choices := data.get("choices"):
                                 modality = data.get("modality")
                                 content = choices[0]["delta"].get("content")
@@ -145,19 +147,36 @@ async def async_request_openai_chat_omni_completions(
                                         output.itl.append(timestamp - most_recent_timestamp)
                                     generated_text += content or ""
                                 elif modality == "audio":
-                                    output.audio_ttfp = timestamp - most_recent_timestamp
-                                    audio_bytes = base64.b64decode(content)
-                                    audio_io = io.BytesIO(audio_bytes)
-                                    audio = AudioSegment.from_file(audio_io)
-                                    output.audio_duration = len(audio) / 1000.0
-                                    output.audio_frames = len(audio.raw_data) // audio.frame_width
+                                    if output.audio_ttfp == 0.0:
+                                        audio_first_timestamp = timestamp
+                                        output.audio_ttfp = timestamp - st
+                                    audio_generate_time = timestamp - audio_first_timestamp
+                                    generated_audio += content or ""
 
                             elif usage := data.get("usage"):
                                 output.output_tokens = usage.get("completion_tokens")
-
                             most_recent_timestamp = timestamp
 
                 output.generated_text = generated_text
+                if generated_audio != "":
+                    audio_bytes = base64.b64decode(generated_audio)
+                    audio_io = io.BytesIO(audio_bytes)
+                    audio = AudioSegment.from_file(audio_io)
+                    output.audio_duration = len(audio) / 1000.0
+
+                    frame_width = audio.frame_width
+                    if frame_width > 0:
+                        output.audio_frames = len(audio.raw_data) // frame_width
+                    else:
+                        output.audio_frames = 0
+                        print("Audio frame width is zero")
+                    audio_duration = output.audio_duration
+                    if audio_duration > 0:
+                        output.audio_rtf = audio_generate_time / output.audio_duration
+                    else:
+                        output.audio_rtf = 0
+                        print("Audio duration is zero")
+
                 output.success = True
                 output.latency = most_recent_timestamp - st
             else:
@@ -167,6 +186,7 @@ async def async_request_openai_chat_omni_completions(
         output.success = False
         exc_info = sys.exc_info()
         output.error = "".join(traceback.format_exception(*exc_info))
+        print(f"send request failed, reason is: {output.error}")
 
     if pbar:
         pbar.update(1)
@@ -481,9 +501,12 @@ async def benchmark(
         # metric.
         if metric_attribute_name not in selected_percentile_metrics:
             return
-        for p, value in getattr(metrics, f"percentiles_{metric_attribute_name}_ms"):
+        is_audio_rtf = metric_attribute_name == "audio_rtf"
+
+        suffix = "" if is_audio_rtf else "_ms"
+        for p, value in getattr(metrics, f"percentiles_{metric_attribute_name}{suffix}"):
             p_word = str(int(p)) if int(p) == p else str(p)
-            result[f"p{p_word}_{metric_attribute_name}_ms"] = value
+            result[f"p{p_word}_{metric_attribute_name}{suffix}"] = value
 
     if task_type == TaskType.GENERATION:
         for metric in selected_percentile_metrics:
