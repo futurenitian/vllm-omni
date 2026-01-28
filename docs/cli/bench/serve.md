@@ -94,7 +94,7 @@ Specify to save benchmark results to a json file
   Base number of multimodal items per request for random-mm.
   Actual per-request count is sampled around this base using
   --random-mm-num-mm-items-range-ratio.
-  Only the random-mm mode support this parameter.
+  Only the random-mm mode supports this parameter.
 
 - `--random-mm-limit-mm-per-prompt`  
   Per-modality hard caps for items attached per request, e.g.

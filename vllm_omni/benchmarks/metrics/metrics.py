@@ -58,7 +58,6 @@ def print_text_metrics(task_type, selected_percentile_metrics, metrics: MultiMod
     print("{:<40} {:<10}".format("Total input tokens:", metrics.total_input))
     if isinstance(metrics, MultiModalsBenchmarkMetrics):
         print("{:<40} {:<10}".format("Total generated tokens:", metrics.total_output))
-    if isinstance(metrics, MultiModalsBenchmarkMetrics):
         print("{:<40} {:<10.2f}".format("Output token throughput (tok/s):", metrics.output_throughput))
         print("{:<40} {:<10.2f}".format("Peak output token throughput (tok/s):", metrics.max_output_tokens_per_s))
         print("{:<40} {:<10.2f}".format("Peak concurrent requests:", metrics.max_concurrent_requests))
