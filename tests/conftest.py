@@ -871,6 +871,8 @@ class OmniServer:
         *,
         env_dict: dict[str, str] | None = None,
     ) -> None:
+        _run_post_test_cleanup()
+        cleanup_dist_env_and_memory()
         self.model = model
         self.serve_args = serve_args
         self.env_dict = env_dict
