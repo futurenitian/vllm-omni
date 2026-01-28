@@ -41,7 +41,6 @@ class OmniBenchmarkSubcommand(CLISubcommand):
             cmd_subparser.add_argument(
                 "--omni",
                 action="store_true",
-                default=True,
                 help="Enable benchmark-Omni mode (always enabled for omni commands)",
             )
             cmd_subparser.set_defaults(dispatch_function=cmd_cls.cmd)

@@ -18,7 +18,7 @@ class OmniBenchmarkServingSubcommand(OmniBenchmarkSubcommandBase):
         for action in parser._actions:
             if action.dest == "percentile_metrics":
                 action.help = (
-                    "Comma-separated list of selected metrics to report percentils."
+                    "Comma-separated list of selected metrics to report percentiles."
                     "This argument specifies the metrics to report percentiles."
                     'Allowed metric names are "ttft", "tpot", "itl", "e2el", "audio_ttfp", "audio_rtf". '
                 )
@@ -35,7 +35,7 @@ class OmniBenchmarkServingSubcommand(OmniBenchmarkSubcommandBase):
                     "The bucket config is a dictionary mapping a multimodal item"
                     "sampling configuration to a probability."
                     "Currently allows for 3 modalities: audio, images and videos. "
-                    "An bucket key is a tuple of (height, width, num_frames)"
+                    "A bucket key is a tuple of (height, width, num_frames)"
                     "The value is the probability of sampling that specific item. "
                     "Example: "
                     "--random-mm-bucket-config "

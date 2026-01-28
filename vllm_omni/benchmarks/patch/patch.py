@@ -171,13 +171,13 @@ async def async_request_openai_chat_omni_completions(
                         output.audio_frames = len(audio.raw_data) // frame_width
                     else:
                         output.audio_frames = 0
-                        print("Audio frame width is zero")
+                        logger.warning("Audio frame width is zero")
                     audio_duration = output.audio_duration
                     if audio_duration > 0:
                         output.audio_rtf = audio_generate_time / output.audio_duration
                     else:
                         output.audio_rtf = 0
-                        print("Audio duration is zero")
+                        logger.warning("Audio duration is zero")
 
                 output.success = True
                 output.latency = most_recent_timestamp - st
@@ -201,14 +201,12 @@ if "openai-chat-omni" not in OPENAI_COMPATIBLE_BACKENDS:
 
 # ruff: noqa: E402
 # Prevent import order from causing patch failures
-# ruff: noqa: E402
-# Prevent import order from causing patch failures
 from vllm.benchmarks import serve
 from vllm.benchmarks.serve import TaskType, calculate_metrics_for_embeddings, get_request, wait_for_endpoint
 
-# ruff: noqa: E402
-# Prevent import order from causing patch failures
 from vllm_omni.benchmarks.metrics.metrics import MultiModalsBenchmarkMetrics, calculate_metrics
+
+# ruff: noqa: E402
 
 benchmark_old = serve.benchmark
 

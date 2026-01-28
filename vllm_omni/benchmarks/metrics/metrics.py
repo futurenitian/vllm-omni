@@ -180,10 +180,10 @@ def calculate_metrics(
             all_tpots.append(tpot)
             itls += outputs[i].itl
             ttfts.append(outputs[i].ttft)
-            audio_ttfps.append(outputs[i].audio_ttfp)
-            audio_rtfs.append(outputs[i].audio_rtf)
-            audio_duration.append(outputs[i].audio_duration)
-            audio_frames.append(outputs[i].audio_frames)
+            audio_ttfps.append(getattr(outputs[i], "audio_ttfp", 0.0))
+            audio_rtfs.append(getattr(outputs[i], "audio_rtf", 0.0))
+            audio_duration.append(getattr(outputs[i], "audio_duration", 0.0))
+            audio_frames.append(getattr(outputs[i], "audio_frames", 0.0))
             e2els.append(outputs[i].latency)
             completed += 1
         else:
@@ -196,6 +196,7 @@ def calculate_metrics(
         if "ttft" in goodput_config_dict:
             valid_metrics.append(ttfts)
             slo_values.append(goodput_config_dict["ttft"] / MILLISECONDS_TO_SECONDS_CONVERSION)
+        if "audio_ttft" in goodput_config_dict:
             valid_metrics.append(audio_ttfps)
             slo_values.append(goodput_config_dict["audio_ttft"] / MILLISECONDS_TO_SECONDS_CONVERSION)
         if "tpot" in goodput_config_dict:
