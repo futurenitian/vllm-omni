@@ -30,7 +30,9 @@ from vllm.benchmarks.lib.endpoint_request_func import (
     _update_payload_common,
     _validate_api_url,
 )
+from vllm.logger import init_logger
 
+logger = init_logger(__name__)
 from vllm_omni.benchmarks.data_modules.random_multi_modal_dataset import OmniRandomMultiModalDataset
 
 get_samples_old = datasets.get_samples
@@ -186,7 +188,7 @@ async def async_request_openai_chat_omni_completions(
         output.success = False
         exc_info = sys.exc_info()
         output.error = "".join(traceback.format_exception(*exc_info))
-        print(f"send request failed, reason is: {output.error}")
+        logger.error(f"ERROR: send request failed, reason is: {output.error}")
 
     if pbar:
         pbar.update(1)

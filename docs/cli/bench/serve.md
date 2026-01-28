@@ -50,7 +50,7 @@ You can use `vllm bench serve --omni --help=all` to get descriptions of all para
         "Use \"--percentile-metrics\" to select metrics.
 
 - `--percentile-metrics`  
-        "Comma-separated list of selected metrics to report percentils."
+        "Comma-separated list of selected metrics to report percentiles."
                     "This argument specifies the metrics to report percentiles."
                     'Allowed metric names are "ttft", "tpot", "itl", "e2el", "audio_ttfp", "audio_rtf". '
 
@@ -102,7 +102,7 @@ Specify to save benchmark results to a json file
   count is clamped to the sum of these limits. When a modality
   reaches its cap, its buckets are excluded and probabilities are
   renormalized.
-  Only the random-mm mode support this parameter.
+  Only the random-mm mode supports this parameter.
 
 - `--random-mm-num-mm-items-range-ratio`  
   Range ratio r in [0, 1] for sampling items per request.
@@ -113,7 +113,7 @@ Specify to save benchmark results to a json file
   to the sum of per-modality limits from
   --random-mm-limit-mm-per-prompt.
   An error is raised if the computed min exceeds the max.
-  Only the random-mm mode support this parameter.
+  Only the random-mm mode supports this parameter.
 
 - `--random-mm-bucket-config`  
   The bucket config is a dictionary mapping a multimodal item
