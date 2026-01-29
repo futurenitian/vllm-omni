@@ -153,22 +153,25 @@ async def async_request_openai_chat_omni_completions(
                                         audio_first_timestamp = timestamp
                                         output.audio_ttfp = timestamp - st
                                     audio_generate_time = timestamp - audio_first_timestamp
-                                    generated_audio += content or ""
+                                    if content != "":
+                                        audio_bytes = base64.b64decode(content)
+                                        seg = AudioSegment.from_file(io.BytesIO(audio_bytes))
+                                        if seg is not None:
+                                            if generated_audio is None:
+                                                generated_audio = seg
+                                            else:
+                                                generated_audio = seg + generated_audio
 
                             elif usage := data.get("usage"):
                                 output.output_tokens = usage.get("completion_tokens")
                             most_recent_timestamp = timestamp
 
                 output.generated_text = generated_text
-                if generated_audio != "":
-                    audio_bytes = base64.b64decode(generated_audio)
-                    audio_io = io.BytesIO(audio_bytes)
-                    audio = AudioSegment.from_file(audio_io)
-                    output.audio_duration = len(audio) / 1000.0
-
-                    frame_width = audio.frame_width
+                if generated_audio is not None:
+                    output.audio_duration = len(generated_audio) / 1000.0
+                    frame_width = generated_audio.frame_width
                     if frame_width > 0:
-                        output.audio_frames = len(audio.raw_data) // frame_width
+                        output.audio_frames = len(generated_audio.raw_data) // frame_width
                     else:
                         output.audio_frames = 0
                         logger.warning("Audio frame width is zero")
