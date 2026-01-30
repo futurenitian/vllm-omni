@@ -55,7 +55,7 @@ class OmniRandomMultiModalDataset(RandomMultiModalDataset):
     def generate_synthetic_audio(
         self,
         duration: int,  # seconds
-        num_channels: int,  # 1：Mono，2：Stereo 5：5.1 surround sound
+        num_channels: int,  # 1:Mono，2:Stereo 5:5.1 surround sound
     ) -> dict[str, Any]:
         """Generate synthetic audio with random values.
         Default use 48000Hz.
