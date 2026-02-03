@@ -6,6 +6,8 @@ from PIL import Image
 from vllm.outputs import RequestOutput
 from vllm.v1.outputs import ModelRunnerOutput
 
+from vllm_omni.inputs.data import OmniPromptType
+
 
 class OmniModelRunnerOutput(ModelRunnerOutput):
     """Model runner output for omni models.
@@ -54,10 +56,10 @@ class OmniRequestOutput:
 
     # Diffusion model fields
     images: list[Image.Image] = field(default_factory=list)
-    prompt: str | None = None
+    prompt: OmniPromptType | None = None
     latents: torch.Tensor | None = None
     metrics: dict[str, Any] = field(default_factory=dict)
-    multimodal_output: dict[str, Any] = field(default_factory=dict)
+    _multimodal_output: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_pipeline(
@@ -89,7 +91,7 @@ class OmniRequestOutput:
         cls,
         request_id: str,
         images: list[Image.Image],
-        prompt: str | None = None,
+        prompt: OmniPromptType | None = None,
         metrics: dict[str, Any] | None = None,
         latents: torch.Tensor | None = None,
         multimodal_output: dict[str, Any] | None = None,
@@ -114,14 +116,77 @@ class OmniRequestOutput:
             prompt=prompt,
             latents=latents,
             metrics=metrics or {},
-            multimodal_output=multimodal_output or {},
+            _multimodal_output=multimodal_output or {},
             finished=True,
         )
+
+    @property
+    def multimodal_output(self) -> dict[str, Any]:
+        """Return multimodal output from the underlying request output or local field.
+
+        For pipeline outputs, this proxies to request_output.multimodal_output.
+        For diffusion outputs, this returns the local _multimodal_output field.
+        """
+        if self.request_output is not None:
+            return getattr(self.request_output, "multimodal_output", {})
+        return self._multimodal_output
 
     @property
     def num_images(self) -> int:
         """Return the number of generated images."""
         return len(self.images)
+
+    # Pass-through properties keep vLLM serving codepaths compatible with
+    # OmniRequestOutput for pipeline outputs (Issue #345).
+    @property
+    def prompt_token_ids(self) -> list[int] | None:
+        """Return prompt token IDs from the underlying request output.
+
+        This property is required for compatibility with vLLM's streaming
+        chat completion generator which checks res.prompt_token_ids.
+        """
+        if self.request_output is not None:
+            return getattr(self.request_output, "prompt_token_ids", None)
+        return None
+
+    @property
+    def outputs(self) -> list[Any]:
+        """Return outputs from the underlying request output.
+
+        This property is required for compatibility with vLLM's streaming
+        and non-streaming chat completion generators.
+        """
+        if self.request_output is not None:
+            return getattr(self.request_output, "outputs", [])
+        return []
+
+    @property
+    def encoder_prompt_token_ids(self) -> list[int] | None:
+        """Return encoder prompt token IDs from the underlying request output."""
+        if self.request_output is not None:
+            return getattr(self.request_output, "encoder_prompt_token_ids", None)
+        return None
+
+    @property
+    def prompt_logprobs(self) -> Any:
+        """Return prompt logprobs from the underlying request output."""
+        if self.request_output is not None:
+            return getattr(self.request_output, "prompt_logprobs", None)
+        return None
+
+    @property
+    def num_cached_tokens(self) -> int | None:
+        """Return number of cached tokens from the underlying request output."""
+        if self.request_output is not None:
+            return getattr(self.request_output, "num_cached_tokens", None)
+        return None
+
+    @property
+    def kv_transfer_params(self) -> Any:
+        """Return KV transfer params from the underlying request output."""
+        if self.request_output is not None:
+            return getattr(self.request_output, "kv_transfer_params", None)
+        return None
 
     @property
     def is_diffusion_output(self) -> bool:
@@ -175,7 +240,7 @@ class OmniRequestOutput:
             f"prompt={self.prompt!r}",
             f"latents={self.latents}",
             f"metrics={self.metrics}",
-            f"multimodal_output={self.multimodal_output}",
+            f"multimodal_output={self._multimodal_output}",
         ]
 
         return f"OmniRequestOutput({', '.join(parts)})"
