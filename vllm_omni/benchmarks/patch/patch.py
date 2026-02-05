@@ -58,6 +58,29 @@ def get_samples(args, tokenizer):
             no_oversample=args.no_oversample,
         )
         return input_requests
+    elif args.dataset_name == "hf":
+        if not args.dataset_path:
+            raise ValueError("dataset_path must be specified for ucf101-subset dataset.")
+        dataset = UCF101MultiModalDataset(
+            dataset_path=args.dataset_path,
+            subset_ratio=getattr(args, "ucf101_subset_ratio", 0.1),
+            random_seed=args.seed,
+        )
+        input_requests = dataset.sample(
+            tokenizer=tokenizer,
+            num_requests=args.num_prompts,
+            prefix_len=args.random_prefix_len,
+            range_ratio=args.random_range_ratio,
+            input_len=args.random_input_len,
+            output_len=args.random_output_len,
+            base_items_per_request=args.random_mm_base_items_per_request,
+            limit_mm_per_prompt=args.random_mm_limit_mm_per_prompt,
+            num_mm_items_range_ratio=args.random_mm_num_mm_items_range_ratio,
+            bucket_config=args.random_mm_bucket_config,
+            request_id_prefix=args.request_id_prefix,
+            no_oversample=args.no_oversample,
+        )
+        return input_requests
     else:
         return get_samples_old(args, tokenizer)
 
