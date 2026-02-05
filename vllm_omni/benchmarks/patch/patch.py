@@ -34,6 +34,7 @@ from vllm.logger import init_logger
 
 logger = init_logger(__name__)
 from vllm_omni.benchmarks.data_modules.random_multi_modal_dataset import OmniRandomMultiModalDataset
+from vllm_omni.benchmarks.data_modules.ucf101_multi_modal_dataset import UCF101MultiModalDataset
 
 get_samples_old = datasets.get_samples
 
